@@ -2,10 +2,10 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 from tqdm import tqdm
-from utils import TensorboardLogger
+from utils import TensorboardLogger, save_checkpoint
 
 
-def train(model, dataloader, args):
+def train(model, optimizer, dataset, dataloader, args):
     '''
     config the training pipeline.
 
@@ -16,13 +16,10 @@ def train(model, dataloader, args):
     :return:
     '''
     # Set up tensorboard logger
-    logger = TensorboardLogger()
-
-    # Setting progress bar
-    # bar = tqdm(enumerate(dataloader), leave=True)
+    logger = TensorboardLogger(args)
 
     # Setting the optimizer
-    optimizer = optim.Adam(params=model.parameters(), lr=args['LEARNING_RATE'])
+    # optimizer = optim.Adam(params=model.parameters(), lr=args['LEARNING_RATE'])
     mix_scaler = torch.cuda.amp.GradScaler()
 
     # Set up the loss
@@ -33,7 +30,6 @@ def train(model, dataloader, args):
     acc_best = 0
 
     for epoch in range(args['EPOCHS']):
-        loss_sum = 0
         bar = tqdm(dataloader, leave=True)
         for idx, (inputs, targets) in enumerate(bar):
             # send to device
@@ -55,19 +51,42 @@ def train(model, dataloader, args):
             bar.set_description(f"Epoch[{epoch + 1}/{args['EPOCHS']}]")
 
             # Logging per iter
-            loss_sum += loss.item()
             logger.update('loss_batch', loss.item())
-            logger.step()
 
         # Logg after each epoch
-        acc, loss_test = test(model, dataloader, critic, args)
+        acc, loss_test = test(model, dataset, dataloader, critic, args)
+
+
+        # Saving the checkpoint
+        if loss_best >= loss_test:
+            save_checkpoint(
+                model=model,
+                optimizer=optimizer,
+                args=args,
+                filename='lowest_loss.pt',
+                info=f"Epoch: {epoch + 1} Acc: {acc} Loss_avg: {loss_test}"
+            )
+            loss_best = loss_test
+
+        if acc_best <= acc:
+            save_checkpoint(
+                model=model,
+                optimizer=optimizer,
+                args=args,
+                filename='best_acc.pt',
+                info=f"Epoch: {epoch + 1} Acc: {acc} Loss_avg: {loss_test}"
+            )
+            acc_best = acc
+
+
+        # Logging per epoch
         logger.update('Accuracy', acc)
         logger.update('Loss_test', loss_test)
-        logger.step()
+        # logger.step()
 
     return model, optimizer
 
-def test(model, dataloader, critic, args):
+def test(model, dataset, dataloader, critic, args):
     '''
     Calculate the accuracy and print some example
 
@@ -79,9 +98,13 @@ def test(model, dataloader, critic, args):
     '''
 
     model.eval()
+
+    # Tracking process
     true_positive = 0
     samples = 0
     loss_sum = 0
+
+    # Training loop
     for inputs,targets in dataloader:
         inputs = inputs.to(args['DEVICE'])
         targets = targets.to(args['DEVICE'])
@@ -100,9 +123,27 @@ def test(model, dataloader, critic, args):
         samples += mask.shape[0] * mask.shape[1]
         loss_sum += loss.item()
 
+    # print example
+    sample_input, sample_target = dataset.getsample()
+    sample_input = sample_input.to(args['DEVICE'])
+    sample_pred = torch.argmax(model(sample_input), dim=2).T # [seq, batch, features] -> [batch, seq]
+
+    # Transfer tensor to string
+    sample_input_str = ''.join([dataset.indice_to_char[int(index)] for index in sample_input.squeeze(0)])
+    sample_target_str = ''.join([dataset.indice_to_char[int(index)] for index in sample_target.squeeze(0)])
+    sample_pred_str = ''.join([dataset.indice_to_char[int(index)] for index in sample_pred.squeeze(0)])
+
+
+
     acc = true_positive / samples
     loss_sum /= mask.shape[0]
     model.train()
+    print('\n===============')
+    print(f"Input: {sample_input_str} \n"
+          f"Output: {sample_target_str} \n"
+          f"Prediction: {sample_pred_str} \n"
+          f"Acc: {acc} \nLoss_avg: {loss_sum}")
+    print('===============')
     return acc, loss_sum
 
 

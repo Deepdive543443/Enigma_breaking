@@ -35,5 +35,12 @@ class RNN(nn.Module):
         output = self.rnn(x)
         return self.decode(output[0]) # Not return the hidden states here
 
+if __name__ == "__main__":
+    from config import args
+    import torch.optim as optim
+    model = RNN(args=args)
+    model.state_dict()
 
+    adam = optim.Adam(model.parameters(), lr=3e-4)
+    print(adam.state_dict())
 

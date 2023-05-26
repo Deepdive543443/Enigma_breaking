@@ -1,27 +1,37 @@
+import os
+from time import gmtime, strftime
+
 args = {
     # Training
     'DEVICE': 'cuda',
     'BATCH_SIZE' : 256,
     'LEARNING_RATE' : 3e-4,
-    'EPOCHS' : 300,
-
+    'EPOCHS' : 500,
 
     # Model configuraion
-    'RNN_TYPE' : 'GRU', # 'GRU'
+    'RNN_TYPE' : 'GRU',
     'LAYERS' : 2,
-    'EMB_DIM' : 26,
+    'EMB_DIM' : 27,
     'HIDDEN': 3000,
     'DROPOUT': 0.5,
     'BIDIRECTION' : True,
 
-    #Dataset
-    'VOCAB_SIZE': 27, # Include 26 English Alphabet and a <BLANK> mark
-    'SEQ_LENGTH': 30, # Output length would be sequence length plus key length
-    'OUTPUT_LAYERS':-1,
+    #Dataset configuraion
+    'VOCAB_SIZE': 27, # Include 26 English Alphabet and a blank mark '-'
+    'SEQ_LENGTH': 15, # Output length would be sequence length plus key length
+    'KEY_INPUT': True,
+    'OUTPUT_LAYERS':-1, # Todo
 
-    #Enigma
+    #Enigma configuraion
     'ROTOR': 'II IV V',
     'REFLECTOR': 'B',
     'RING_SETTING': [1, 20, 11],
-    'PLUGBOARD': 'AV BS CG DL FU HZ IN KM OW RX'
+    'PLUGBOARD': 'AV BS CG DL FU HZ IN KM OW RX',
+
+    # Loss configuration
+    'LOSS_TYPE': 'CROSS_ENTROPY',
+
+    # Log and checkpoint
+    'LOG': os.path.join('tensorboard', strftime("%a%d%b%Y%H%M%S", gmtime())),
+    'LOAD_CKPT': None # Paste the path of checkpoint here
 }

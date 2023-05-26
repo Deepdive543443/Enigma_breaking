@@ -25,6 +25,7 @@ class Enigma_simulate_dataset(Dataset):
         self.initial_state = list(product(indice, indice, indice))
 
         self.char_to_indice = {chr(ord('A') + i): i for i in range(26)} # This gives a dict with {alphabet: index}
+        self.char_to_indice['-'] = 26
         self.indice_to_char = {v: k for k, v in self.char_to_indice.items()}
 
 
@@ -45,12 +46,19 @@ class Enigma_simulate_dataset(Dataset):
         # setting the enigma 
         self.enigma_machine.set_display(initial_position)
 
-        # 
+        # translation the
         cipher_text = self.enigma_machine.process_text(plaintext)
         cipher_text_indice = torch.LongTensor([self.char_to_indice[char] for char in cipher_text])
 
         # Outputs in forms of [keys, ]
         return torch.cat([initial_position_indice, cipher_text_indice]), torch.cat([initial_position_indice, plaintext_indice])
+
+    def getsample(self):
+        index = int(torch.randint(low=0, high=len(self.initial_state), size=[]))
+        sample_input, sample_target = self.__getitem__(index)
+        sample_input, sample_target = sample_input.unsqueeze(0), sample_target.unsqueeze(0)
+        return sample_input, sample_target
+
 
 def collate_fn_padding(batch):
     # Each item in batch (input, target)

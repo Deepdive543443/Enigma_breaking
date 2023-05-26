@@ -1,6 +1,6 @@
 from config import args
 from train import train
-from utils import launch_tensorboard
+from utils import launch_tensorboard, save_checkpoint, load_checkpoint
 
 import torch
 optim = torch.optim
@@ -8,7 +8,7 @@ from model import RNN
 from dataset import Enigma_simulate_dataset, collate_fn_padding
 from torch.utils.data import DataLoader
 
-# 按间距中的绿色按钮以运行脚本。
+
 if __name__ == '__main__':
     # Launch tensorboard
     url = launch_tensorboard('tensorboard')
@@ -26,12 +26,21 @@ if __name__ == '__main__':
 
 
     # Setting RNN model
-    model = RNN(args=args)
-    model.to(args['DEVICE'])
+    if args['LOAD_CKPT'] is None:
+        # Start training from scratch
+        model = RNN(args=args)
+        model.to(args['DEVICE'])
+        optimizer = optim.Adam(params=model.parameters(), lr=args['LEARNING_RATE'])
+    else:
+        # Continue training on previous weights and optimizer setting
+        # This would also overwrite the current args by the one
+        model, optimizer, _ = load_checkpoint(args['LOAD_CKPT'])
 
     # Training loop
     train(
         model=model,
+        optimizer=optimizer,
+        dataset=dataset,
         dataloader=dataloader,
         args=args
     )
