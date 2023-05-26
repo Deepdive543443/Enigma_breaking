@@ -27,8 +27,6 @@ class Enigma_simulate_dataset(Dataset):
         self.char_to_indice = {chr(ord('A') + i): i for i in range(26)} # This gives a dict with {alphabet: index}
         self.indice_to_char = {v: k for k, v in self.char_to_indice.items()}
 
-        
-
 
     def __len__(self):
         return len(self.initial_state)
@@ -47,10 +45,11 @@ class Enigma_simulate_dataset(Dataset):
         # setting the enigma 
         self.enigma_machine.set_display(initial_position)
 
-        # Obtain the cipher text from enigma
+        # 
         cipher_text = self.enigma_machine.process_text(plaintext)
-        # print(cipher_text)
         cipher_text_indice = torch.LongTensor([self.char_to_indice[char] for char in cipher_text])
+
+        # Outputs in forms of [keys, ]
         return torch.cat([initial_position_indice, cipher_text_indice]), torch.cat([initial_position_indice, plaintext_indice])
 
 def collate_fn_padding(batch):
@@ -64,8 +63,10 @@ def collate_fn_padding(batch):
         # teaching_batch.append(target[:-1])
 
     # Merge list of sentences into a batch with padding
-    batch_inputs = pad_sequence(inputs_batch, padding_value=0).permute(1, 0, 2).squeeze(-1)
-    batch_target = pad_sequence(target_batch, padding_value=0).permute(1, 0, 2).squeeze(-1) # [seq, batch, unsqueezed]
+    batch_inputs = pad_sequence(inputs_batch, padding_value=0).T
+    batch_target = pad_sequence(target_batch, padding_value=0).T
+    # batch_inputs = pad_sequence(inputs_batch, padding_value=0).permute(1, 0, 2).squeeze(-1)
+    # batch_target = pad_sequence(target_batch, padding_value=0).permute(1, 0, 2).squeeze(-1) # [seq, batch, unsqueezed]
 
     # Transfer back to [batch, indice]
     return batch_inputs, batch_target
@@ -85,11 +86,12 @@ if __name__ == "__main__":
     enigma_dataloader = DataLoader(enigma_dataset, batch_size=3, shuffle=True, drop_last=True)
 
     for idx, (inputs, targets) in enumerate(enigma_dataloader):
-        print(f"Input shape :{inputs.shape}  Targets shape: {targets.shape}")
+        print(f"Input shape: {inputs.shape}  Target shape: {targets.shape}")
         model = RNN(args=args)
         outputs = model(inputs)
         print(f"Output shape: {outputs.shape}")
         break
+
     # enigma = EnigmaMachine.from_key_sheet(
     #     rotors='II IV V',
     #     reflector='B',

@@ -32,8 +32,7 @@ class RNN(nn.Module):
         :return: plaintext or deciphered output.
         '''
         x = self.dropout(self.emb(x)).permute(1, 0, 2) # [batch, seq] -> [seq, batch, embedding]
-        output = self.rnn(x) # Obtain the outputs and hidden states or cell
-
+        output = self.rnn(x)
         return self.decode(output[0]) # Not return the hidden states here
 
 

@@ -1,6 +1,8 @@
+import torch
 from torch.utils.tensorboard import SummaryWriter
-import os, shutil, torch
-
+import os, shutil
+from time import gmtime, strftime
+from tensorboard import program
 
 class TensorboardLogger:
     def __init__(self, root = 'tensorboard'):
@@ -9,10 +11,12 @@ class TensorboardLogger:
         self.global_step = 0
         self.logger = {}
 
-        #Make logging file
-        num_logs = len(os.listdir(self.root))
-        os.makedirs(num_logs)
-        self.writer = SummaryWriter(os.path.join(self.root, num_logs))
+        print("Initial")
+
+        # Make Path
+        log_path = os.path.join(root, strftime("%a%d%b%Y%H%M%S", gmtime()))
+        # os.makedirs(log_path)
+        self.writer = SummaryWriter(log_path)
 
     def update(self, key, value):
         try:
@@ -26,30 +30,23 @@ class TensorboardLogger:
         for k, v in self.logger.items():
             self.writer.add_scalar(k, v['value'], global_step=v['step'])
 
+def launch_tensorboard(tracking_address):
+    # https://stackoverflow.com/a/55708102
+    # tb will run in background but it will
+    # be stopped once the main process is stopped.
+    try:
+        tb = program.TensorBoard()
+        tb.configure(argv=[None, '--logdir', tracking_address, '--port', '8899'])
+        url = tb.launch()
+        if url.endswith("/"):
+            url = url[:-1]
 
-def save_checkpoint(model, optimizer, args, logger, type_ckpt):
-    # Make an folder checkpoint if we don't have it
-    os.mkdir('ckpt')
-    num_ckpt = len(os.listdir('ckpt'))
-    name_ckpt = str(num_ckpt) + f"_{type_ckpt}"
-    
-    # Saving the weight and configuration of model, and the status of Adam optimizer
-    torch.save(
-        {
-            'weights':model.state_dict(),
-            'optimizer_state': optimizer.state_dict(),
-            'args': args,
-            'logger': logger
-        },
-        os.path.join('ckpt', name_ckpt)
-    )
+        return url
+    except Exception:
+        return None
 
-def load_checkpoint(model, optimizer, path):
-    ckpt = torch.load(path)
-    
-    # Loading weight and stat for model and optimizer
-    model.load_state_dict(ckpt['weights'])
-    optimizer.load_state_dict(ckpt['optimizer_state'])
-    args = ckpt['args']
-    logger = ckpt['logger']
-    return model, optimizer, args
+if __name__ == "__main__":
+    # log = TensorboardLogger()
+    # torch.save(log, 'log.th')
+
+    log = torch.load('log.th')

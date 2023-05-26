@@ -1,21 +1,16 @@
 args = {
-    # Training hyperparameters
+    # Training
     'DEVICE': 'cuda',
     'BATCH_SIZE' : 256,
     'LEARNING_RATE' : 3e-4,
     'EPOCHS' : 300,
 
-    # Training setting
-    'SAVE_CKPT': False,
-    'LOAD_CKPT': False, # Type the path of checkpoint here
-
-
 
     # Model configuraion
     'RNN_TYPE' : 'GRU', # 'GRU'
     'LAYERS' : 2,
-    'EMB_DIM' : 300,
-    'HIDDEN': 1024,
+    'EMB_DIM' : 26,
+    'HIDDEN': 3000,
     'DROPOUT': 0.5,
     'BIDIRECTION' : True,
 

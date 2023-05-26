@@ -1,16 +1,39 @@
-# 这是一个示例 Python 脚本。
+from config import args
+from train import train
+from utils import launch_tensorboard
 
-# 按 Shift+F10 执行或将其替换为您的代码。
-# 按 双击 Shift 在所有地方搜索类、文件、工具窗口、操作和设置。
-
-
-def print_hi(name):
-    # 在下面的代码行中使用断点来调试脚本。
-    print(f'Hi, {name}')  # 按 Ctrl+F8 切换断点。
-
+import torch
+optim = torch.optim
+from model import RNN
+from dataset import Enigma_simulate_dataset, collate_fn_padding
+from torch.utils.data import DataLoader
 
 # 按间距中的绿色按钮以运行脚本。
 if __name__ == '__main__':
-    print_hi('PyCharm')
+    # Launch tensorboard
+    url = launch_tensorboard('tensorboard')
+    print(f"Tensorboard listening on {url}")
 
-# 访问 https://www.jetbrains.com/help/pycharm/ 获取 PyCharm 帮助
+
+    # Setting dataset and loader
+    dataset = Enigma_simulate_dataset(args=args)
+    dataloader = DataLoader(
+        dataset=dataset,
+        batch_size=args['BATCH_SIZE'],
+        collate_fn=collate_fn_padding,
+        shuffle=True
+    )
+
+
+    # Setting RNN model
+    model = RNN(args=args)
+    model.to(args['DEVICE'])
+
+    # Training loop
+    train(
+        model=model,
+        dataloader=dataloader,
+        args=args
+    )
+
+
