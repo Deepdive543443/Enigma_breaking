@@ -6,7 +6,7 @@ args = {
     'DEVICE': 'cuda',
     'BATCH_SIZE' : 256,
     'LEARNING_RATE' : 3e-4,
-    'EPOCHS' : 500,
+    'EPOCHS' : 1000,
 
     # Model configuraion
     'RNN_TYPE' : 'LSTM',
