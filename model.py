@@ -52,27 +52,27 @@ class RNN(nn.Module):
         return self.seq_decode(output[0]) # Not return the hidden states here
 
 
-# class TransformerPart(nn.Module):
-#     def __init__(self, args):
-#         super().__init__()
-#         self.emb = nn.Embedding(args['VOCAB_SIZE'], args['EMB_DIM'])
-#         encoder_layer = nn.TransformerEncoderLayer(d_model=args['EMB_DIM'], nhead=args['ATTN_HEAD'])
-#         self.tfm = nn.TransformerEncoder(
-#                 encoder_layer=encoder_layer, num_layers=args['LAYERS']
-#             )
-#
-#         self.positional = nn.Parameter(torch.randn(args['SEQ_LENGTH'] + 3, 1, args['EMB_DIM']))
-#
-#     def forward(self, x):
-#         '''
-#
-#
-#         :param x: The indice input with shape [batch, seq]
-#         :return: plaintext or deciphered output.
-#         '''
-#         x = self.dropout(self.emb(x)).permute(1, 0, 2) # [batch, seq] -> [seq, batch, embedding]
-#         output = self.rnn(x)
-#         return self.decode(output[0]) # Not return the hidden states here
+class TransformerPart(nn.Module):
+    def __init__(self, args):
+        super().__init__()
+        self.emb = nn.Embedding(args['VOCAB_SIZE'], args['EMB_DIM'])
+        encoder_layer = nn.TransformerEncoderLayer(d_model=args['EMB_DIM'], nhead=args['ATTN_HEAD'])
+        self.tfm = nn.TransformerEncoder(
+                encoder_layer=encoder_layer, num_layers=args['LAYERS']
+            )
+
+        self.positional = nn.Parameter(torch.randn(args['SEQ_LENGTH'] + 3, 1, args['EMB_DIM']))
+
+    def forward(self, x):
+        '''
+
+
+        :param x: The indice input with shape [batch, seq]
+        :return: plaintext or deciphered output.
+        '''
+        x = self.dropout(self.emb(x)).permute(1, 0, 2) # [batch, seq] -> [seq, batch, embedding]
+        output = self.rnn(x)
+        return self.decode(output[0]) # Not return the hidden states here
 #
 
 
