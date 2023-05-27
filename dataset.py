@@ -51,7 +51,7 @@ class Enigma_simulate_dataset(Dataset):
         cipher_text_indice = torch.LongTensor([self.char_to_indice[char] for char in cipher_text])
 
         # Outputs in forms of [keys, ]
-        return torch.cat([initial_position_indice, cipher_text_indice]), torch.cat([initial_position_indice, plaintext_indice])
+        return cipher_text_indice, plaintext_indice
 
     def getsample(self):
         index = int(torch.randint(low=0, high=len(self.initial_state), size=[]))
@@ -73,8 +73,6 @@ def collate_fn_padding(batch):
     # Merge list of sentences into a batch with padding
     batch_inputs = pad_sequence(inputs_batch, padding_value=0).T
     batch_target = pad_sequence(target_batch, padding_value=0).T
-    # batch_inputs = pad_sequence(inputs_batch, padding_value=0).permute(1, 0, 2).squeeze(-1)
-    # batch_target = pad_sequence(target_batch, padding_value=0).permute(1, 0, 2).squeeze(-1) # [seq, batch, unsqueezed]
 
     # Transfer back to [batch, indice]
     return batch_inputs, batch_target

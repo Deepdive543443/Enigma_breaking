@@ -7,9 +7,16 @@ optim = torch.optim
 from model import RNN
 from dataset import Enigma_simulate_dataset, collate_fn_padding
 from torch.utils.data import DataLoader
-
+import argparse
 
 if __name__ == '__main__':
+    # config arguments
+    ap = argparse.ArgumentParser()
+    for k, v in args.items():
+        ap.add_argument(f"--{k}", type=type(v), default=v)
+
+    args = vars(ap.parse_args())
+
     # Launch tensorboard
     url = launch_tensorboard('tensorboard')
     print(f"Tensorboard listening on {url}")

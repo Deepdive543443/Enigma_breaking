@@ -30,7 +30,11 @@ def train(model, optimizer, dataset, dataloader, args):
     acc_best = 0
 
     for epoch in range(args['EPOCHS']):
-        bar = tqdm(dataloader, leave=True)
+        if args['PROGRESS_BAR'] == 1:
+            bar = tqdm(dataloader, leave=True)
+        else:
+            bar = dataloader
+
         for idx, (inputs, targets) in enumerate(bar):
             # send to device
             inputs = inputs.to(args['DEVICE'])
@@ -48,13 +52,13 @@ def train(model, optimizer, dataset, dataloader, args):
             mix_scaler.update()
 
             # Bar
-            bar.set_description(f"Epoch[{epoch + 1}/{args['EPOCHS']}]")
+            bar.set_description(f"Epoch[{epoch + 1}/{args['EPOCHS']}]") if args['PROGRESS_BAR'] == 1 else None
 
             # Logging per iter
             logger.update('loss_batch', loss.item())
 
         # Logg after each epoch
-        acc, loss_test = test(model, dataset, dataloader, critic, args)
+        acc, loss_test = test(model, dataset, dataloader, critic, epoch, args)
 
 
         # Saving the checkpoint
@@ -86,7 +90,7 @@ def train(model, optimizer, dataset, dataloader, args):
 
     return model, optimizer
 
-def test(model, dataset, dataloader, critic, args):
+def test(model, dataset, dataloader, critic, epoch, args):
     '''
     Calculate the accuracy and print some example
 
@@ -139,7 +143,8 @@ def test(model, dataset, dataloader, critic, args):
     loss_sum /= mask.shape[0]
     model.train()
     print('\n===============')
-    print(f"Input: {sample_input_str} \n"
+    print(f"Epoch: {epoch + 1} \n"
+          f"Input: {sample_input_str} \n"
           f"Output: {sample_target_str} \n"
           f"Prediction: {sample_pred_str} \n"
           f"Acc: {acc} \nLoss_avg: {loss_sum}")

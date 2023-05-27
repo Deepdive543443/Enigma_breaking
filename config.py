@@ -9,10 +9,11 @@ args = {
     'EPOCHS' : 500,
 
     # Model configuraion
-    'RNN_TYPE' : 'GRU',
+    'RNN_TYPE' : 'LSTM',
     'LAYERS' : 2,
     'EMB_DIM' : 27,
     'HIDDEN': 3000,
+    'ATTN_HEAD': 8,
     'DROPOUT': 0.5,
     'BIDIRECTION' : True,
 
@@ -33,5 +34,8 @@ args = {
 
     # Log and checkpoint
     'LOG': os.path.join('tensorboard', strftime("%a%d%b%Y%H%M%S", gmtime())),
-    'LOAD_CKPT': None # Paste the path of checkpoint here
+    'LOAD_CKPT': None, # Paste the path of checkpoint here
+
+    # Batch mode
+    'PROGRESS_BAR': 1, # Turn this off if the programme shows reprinting issues in batch mode output.
 }
