@@ -42,8 +42,8 @@ def train(model, optimizer, dataset, dataloader, args):
 
             # Make prediction
             with torch.cuda.amp.autocast():
-                outputs = (model(inputs)).permute(1, 2, 0) # [seq, batch, features] -> [batch, features, seq]
-                loss = critic(outputs, targets)
+                outputs = (model(inputs, targets)).permute(1, 2, 0) # [seq, batch, features] -> [batch, features, seq]
+                loss = critic(outputs, targets[:, 1:])
 
             # Update weights in mix precision
             optimizer.zero_grad()
@@ -109,17 +109,17 @@ def test(model, dataset, dataloader, critic, epoch, args):
     loss_sum = 0
 
     # Training loop
-    for inputs,targets in dataloader:
+    for inputs, targets in dataloader:
         inputs = inputs.to(args['DEVICE'])
         targets = targets.to(args['DEVICE'])
 
         # Compute loss
-        outputs = (model(inputs)).permute(1, 2, 0)  # [seq, batch, features] -> [batch, features, seq]
-        loss = critic(outputs, targets)
+        outputs = (model(inputs, targets)).permute(1, 2, 0)  # [seq, batch, features] -> [batch, features, seq]
+        loss = critic(outputs, targets[:, 1:])
 
         # Compute metrics
         outputs_indices = torch.argmax(outputs, dim=1)
-        mask = outputs_indices == targets
+        mask = outputs_indices == targets[:, 1:]
 
 
         # Track performance

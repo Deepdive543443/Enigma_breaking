@@ -1,7 +1,7 @@
 import torch
 from torch.utils.tensorboard import SummaryWriter
 import os
-from model import RNN
+from model import Transformer
 from tensorboard import program
 
 optim = torch.optim

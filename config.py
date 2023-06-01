@@ -4,21 +4,21 @@ from time import gmtime, strftime
 args = {
     # Training
     'DEVICE': 'cuda',
-    'BATCH_SIZE' : 256,
+    'BATCH_SIZE' : 128,
     'LEARNING_RATE' : 3e-4,
     'EPOCHS' : 1000,
 
     # Model configuraion
     'RNN_TYPE' : 'LSTM',
     'LAYERS' : 2,
-    'EMB_DIM' : 27,
+    'EMB_DIM' : 256,
     'HIDDEN': 3000,
     'ATTN_HEAD': 8,
     'DROPOUT': 0.5,
     'BIDIRECTION' : True,
 
     #Dataset configuraion
-    'VOCAB_SIZE': 27, # Include 26 English Alphabet and a blank mark '-'
+    'VOCAB_SIZE': 28, # Include 26 English Alphabet and <s> and </s>
     'SEQ_LENGTH': 15, # Output length would be sequence length plus key length
     'KEY_INPUT': True,
     'OUTPUT_LAYERS':-1, # Todo

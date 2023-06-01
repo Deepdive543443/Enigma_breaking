@@ -25,7 +25,7 @@ class Enigma_simulate_dataset(Dataset):
         self.initial_state = list(product(indice, indice, indice))
 
         self.char_to_indice = {chr(ord('A') + i): i for i in range(26)} # This gives a dict with {alphabet: index}
-        self.char_to_indice['-'] = 26
+        self.char_to_indice['<s>'], self.char_to_indice['</s>'] = 26, 27
         self.indice_to_char = {v: k for k, v in self.char_to_indice.items()}
 
 
@@ -51,7 +51,18 @@ class Enigma_simulate_dataset(Dataset):
         cipher_text_indice = torch.LongTensor([self.char_to_indice[char] for char in cipher_text])
 
         # Outputs in forms of [keys, ]
-        return cipher_text_indice, plaintext_indice
+        start_token = torch.LongTensor([26])
+        end_token = torch.LongTensor([27])
+
+
+        return torch.cat([
+            start_token, 
+            cipher_text_indice,
+            end_token,
+            start_token, 
+            plaintext_indice,
+            end_token,
+        ]), torch.cat([start_token, initial_position_indice, end_token]) 
 
     def getsample(self):
         index = int(torch.randint(low=0, high=len(self.initial_state), size=[]))
@@ -84,7 +95,7 @@ def collate_fn_padding(batch):
 
 
 if __name__ == "__main__":
-    from model import RNN
+    from model import Transformer
     enigma_dataset = Enigma_simulate_dataset(args=args)
     cipher_text_indice, plaintext_indice = enigma_dataset.__getitem__(0)
     print(cipher_text_indice, plaintext_indice)
@@ -93,43 +104,9 @@ if __name__ == "__main__":
 
     for idx, (inputs, targets) in enumerate(enigma_dataloader):
         print(f"Input shape: {inputs.shape}  Target shape: {targets.shape}")
-        model = RNN(args=args)
-        outputs = model(inputs)
+        model = Transformer(args=args)
+        outputs = model(inputs, targets)
         print(f"Output shape: {outputs.shape}")
         break
 
-    # enigma = EnigmaMachine.from_key_sheet(
-    #     rotors='II IV V',
-    #     reflector='B',
-    #     ring_settings=[1, 20, 11],
-    #     plugboard_settings='AV BS CG DL FU HZ IN KM OW RX'
-    # )
-
-    # enigma.set_display('AAA')
-
-    # plaintext = 'IMADOG'
-    # ciphertext = enigma.process_text(plaintext)
-    # print(f'plaintext: {plaintext}\nProcessed text: {ciphertext}')
-
-    # print(enigma.get_display())
-    # enigma.set_display('AAA')
-    # print(f'cipher text: {ciphertext}\nDeciphered text: {enigma.process_text(ciphertext)}')
-
-    # rotor_1 = Rotor(
-    #     model_name='Rotor 1', wiring='BDFHJLCPRTXVZNYEIWGAKMUSQO', ring_setting=0, stepping="Z"
-    # )
-    # input = 'A'
-    # postion = ord(input) - ord('A') 
-
-    # print(f'order:{postion}  {rotor_1.signal_in(postion)}')
-    # rotor_1.rotate()
-    # print(f'order:{postion}  {rotor_1.signal_in(postion)}')
-
-    # indice = {i: chr(ord('A') + i) for i in range(26)}
-    # plaintext_indice = torch.randint(low=0, high=25, size=[26])
-    # for i in plaintext_indice:
-    #     print(indice[int(i)])
-
-    # print(torch.LongTensor((20, 23, 12)))
-
-
+   

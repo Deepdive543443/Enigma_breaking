@@ -4,7 +4,7 @@ from utils import launch_tensorboard, save_checkpoint, load_checkpoint
 
 import torch
 optim = torch.optim
-from model import RNN
+from model import Transformer
 from dataset import Enigma_simulate_dataset, collate_fn_padding
 from torch.utils.data import DataLoader
 import argparse
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     # Setting RNN model
     if args['LOAD_CKPT'] is None:
         # Start training from scratch
-        model = RNN(args=args)
+        model = Transformer(args=args)
         model.to(args['DEVICE'])
         optimizer = optim.Adam(params=model.parameters(), lr=args['LEARNING_RATE'])
     else:
