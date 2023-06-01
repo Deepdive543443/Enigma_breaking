@@ -4,17 +4,25 @@ from time import gmtime, strftime
 args = {
     # Training
     'DEVICE': 'cuda',
-    'BATCH_SIZE' : 128,
-    'LEARNING_RATE' : 3e-4,
+    'BATCH_SIZE' : 256,
+    'LEARNING_RATE' : 3e-4,#1 / (512 ** 0.5),
+    'BETA1': 0.9,
+    'BETA2': 0.98,
+    'EPS': 1e-9,
     'EPOCHS' : 1000,
+    'WARMUP_STEP': 4000,
 
     # Model configuraion
-    'RNN_TYPE' : 'LSTM',
-    'LAYERS' : 2,
-    'EMB_DIM' : 256,
-    'HIDDEN': 3000,
+    'LAYERS' : 6,
+    'EMB_DIM' : 512,
+    'HIDDEN': 2048,
     'ATTN_HEAD': 8,
-    'DROPOUT': 0.5,
+    'DROPOUT': 0.1,
+
+    # Transformer configuration
+
+    # RNN Configuration
+    'RNN_TYPE' : 'LSTM',
     'BIDIRECTION' : True,
 
     #Dataset configuraion

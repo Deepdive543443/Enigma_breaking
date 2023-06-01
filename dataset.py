@@ -55,14 +55,23 @@ class Enigma_simulate_dataset(Dataset):
         end_token = torch.LongTensor([27])
 
 
+        # return torch.cat([
+        #     start_token,
+        #     cipher_text_indice,
+        #     end_token,
+        #     start_token,
+        #     plaintext_indice,
+        #     end_token,
+        # ]), torch.cat([start_token, initial_position_indice, end_token])
+
         return torch.cat([
-            start_token, 
+            start_token,
             cipher_text_indice,
             end_token,
-            start_token, 
-            plaintext_indice,
+            start_token,
+            initial_position_indice,
             end_token,
-        ]), torch.cat([start_token, initial_position_indice, end_token]) 
+        ]), torch.cat([start_token, plaintext_indice, end_token])
 
     def getsample(self):
         index = int(torch.randint(low=0, high=len(self.initial_state), size=[]))

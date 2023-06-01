@@ -74,11 +74,11 @@ def load_checkpoint(filename):
 
     # Initial model and load the trained weights
     args = ckpt['args']
-    model = RNN(args)
+    model = Transformer(args)
     model.load_state_dict(ckpt['weights'])
     model.to(args['DEVICE'])
 
-    optimizer = optim.Adam(model.parameters(), lr=args['LEARNING_RATE'])
+    optimizer = optim.Adam(model.parameters(), lr=args['LEARNING_RATE'], betas=[args['BETA1'], args['BETA1']], eps=args['EPS'])
     optimizer.load_state_dict(ckpt['optimizer'])
     return model, optimizer, args
 

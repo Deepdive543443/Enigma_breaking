@@ -37,7 +37,7 @@ if __name__ == '__main__':
         # Start training from scratch
         model = Transformer(args=args)
         model.to(args['DEVICE'])
-        optimizer = optim.Adam(params=model.parameters(), lr=args['LEARNING_RATE'])
+        optimizer = optim.Adam(params=model.parameters(), lr=args['LEARNING_RATE'], betas=[args['BETA1'], args['BETA1']], eps=args['EPS'])
     else:
         # Continue training on previous weights and optimizer setting
         # This would also overwrite the current args by the one
