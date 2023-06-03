@@ -9,18 +9,18 @@ args = {
     'BETA1': 0.9,
     'BETA2': 0.98,
     'EPS': 1e-9,
-    'EPOCHS' : 5,
+    'EPOCHS' : 1000,
     'WARMUP_STEP': 2000,
 
     # Model configuraion
-    'TYPE': 'CP2K', # 'Encoder' for sequence labeling Or 'CP2K' for text pair classification
+    'TYPE': 'Encoder', # 'Encoder' for sequence labeling Or 'CP2K' for text pair classification
     'LAYERS' : 6,
     'EMB_DIM' : 512,
     'HIDDEN': 2048,
     'DROPOUT': 0.1,
 
     # Pretrained setting
-    'PRE_TRAINED_ENC': 'tensorboard/Sat03Jun2023144636/Encoder_best_acc.pt',
+    'PRE_TRAINED_ENC': None,
 
     # Transformer configuration
     'ATTN_HEAD': 8,

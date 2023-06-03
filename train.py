@@ -204,8 +204,11 @@ def test(model, dataset, dataloader, critic, epoch, args):
         sample_pred_str = ''.join([dataset.indice_to_char[int(index)] for index in sample_pred.squeeze(0)])
     elif args['TYPE'] == 'CP2K':
         sample_pred = torch.argmax(sample_pred, dim=1)
-        sample_target_str = targets.squeeze(0)
-        sample_pred_str = sample_pred.squeeze(0)
+        sample_target_str = int(targets.squeeze(0))
+        sample_pred_str = int(sample_pred.squeeze(0))
+
+        sample_target_str = ''.join([dataset.indice_to_char[int(char)] for char in dataset.initial_state_dict[sample_target_str]])
+        sample_pred_str = ''.join([dataset.indice_to_char[int(char)] for char in dataset.initial_state_dict[sample_pred_str]])
 
 
 
