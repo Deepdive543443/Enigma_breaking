@@ -60,14 +60,14 @@ if __name__ == '__main__':
         # This would also overwrite the current args by the one
         model, optimizer, _ = load_checkpoint(args['LOAD_CKPT'])
 
-    # Print lr strategy
-    print(f"Warm up to: {args['LEARNING_RATE'] * min(pow(args['WARMUP_STEP'], -0.5), args['WARMUP_STEP'] * pow(args['WARMUP_STEP'], -1.5))}")
+    # Use Torch.compile()
+    # This features require pytorch 2.0
+    if args['USE_COMPILE'] != 0:
+        model = torch.compile(model)
+
 
 
     # Training loop
-
-
-
     train(
         model=model,
         optimizer=optimizer,
@@ -75,5 +75,6 @@ if __name__ == '__main__':
         dataloader=dataloader,
         args=args
     )
+    
 
 

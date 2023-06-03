@@ -47,5 +47,6 @@ args = {
     'LOAD_CKPT': None, # Paste the path of checkpoint here
 
     # Batch mode
+    'USE_COMPILE': 0,
     'PROGRESS_BAR': 1, # Turn this off if the programme shows reprinting issues in batch mode output.
 }
