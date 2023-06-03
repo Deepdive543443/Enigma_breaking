@@ -1,7 +1,7 @@
 import torch
 from torch.utils.tensorboard import SummaryWriter
-import os
-from model import Transformer
+import os, json
+from model import Encoder, cp_2_key_model
 from tensorboard import program
 
 optim = torch.optim
@@ -16,6 +16,10 @@ class TensorboardLogger:
         # log_path = os.path.join(root, strftime("%a%d%b%Y%H%M%S", gmtime()))
         # os.makedirs(log_path)
         self.writer = SummaryWriter(args['LOG'])
+
+        # Make a copy of config file
+        with open(os.path.join(args['LOG'], 'config.json'), "w") as outfile:
+            json.dump(args, outfile)
 
     def update(self, key, value):
         try:
@@ -73,14 +77,20 @@ def load_checkpoint(filename):
     print(f"Loaded checkpoint start from:\n{ckpt['info']}")
 
     # Initial model and load the trained weights
-    args = ckpt['args']
-    model = Transformer(args)
-    model.load_state_dict(ckpt['weights'])
-    model.to(args['DEVICE'])
+    ckpt_args = ckpt['args']
 
-    optimizer = optim.Adam(model.parameters(), lr=args['LEARNING_RATE'], betas=[args['BETA1'], args['BETA1']], eps=args['EPS'])
+    if ckpt_args['TYPE'] == 'Encoder':
+        model = Encoder(ckpt_args)
+
+    elif ckpt_args['TYPE'] == 'CP2K':
+        model = cp_2_key_model
+
+    model.load_state_dict(ckpt['weights'])
+    model.to(ckpt_args['DEVICE'])
+
+    optimizer = optim.Adam(model.parameters(), lr=ckpt_args['LEARNING_RATE'], betas=[ckpt_args['BETA1'], ckpt_args['BETA1']], eps=ckpt_args['EPS'])
     optimizer.load_state_dict(ckpt['optimizer'])
-    return model, optimizer, args
+    return model, optimizer, ckpt_args
 
 if __name__ == "__main__":
     # log = TensorboardLogger()

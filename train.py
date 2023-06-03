@@ -1,15 +1,51 @@
+import math
 import torch
 import torch.optim as optim
 import torch.nn as nn
 from tqdm import tqdm
 from utils import TensorboardLogger, save_checkpoint
-from math import pow
 
 
 # def lr_scheduler(args, optimizer):
 #     l = lambda current_step: min(pow(current_steps, -0.5), current_steps * pow(args['WARMUP_STEP'], 1.5))
 #     sceduler = optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=l)
 #     return sceduler
+
+def cycle_loss(model, ciphers, plains, keys):
+    pass
+
+class compute_loss(nn.Module):
+    def __init__(self, args):
+        super(compute_loss, self).__init__()
+        self.ce = nn.CrossEntropyLoss()
+
+class compute_loss_pos(compute_loss):
+    def __init__(self, args):
+        super().__init__(args)
+        # self.mask = torch.zeros(size=[args['SEQ_LENGTH'] + 7])
+        # self.mask[0:args['SEQ_LENGTH'] + 2] = 1
+        # self.mask = self.mask.bool().to(args['DEVICE'])
+
+    def forward(self, model, inputs, targets):
+        pred_targets = model(inputs).permute(1, 2, 0)
+        # pred_targets = pred_targets[..., self.mask]
+        # targets = targets[..., self.mask]
+
+        loss = self.ce(pred_targets, targets)
+        return loss, pred_targets
+
+class compute_loss_cp2k(compute_loss):
+    def __init__(self, args):
+        super().__init__(args)
+
+    def forward(self, model, inputs, targets):
+        pred_targets = model(inputs)
+        loss = self.ce(pred_targets, targets)
+        return loss, pred_targets
+
+
+
+
 
 def train(model, optimizer, dataset, dataloader, args):
     '''
@@ -29,7 +65,7 @@ def train(model, optimizer, dataset, dataloader, args):
     mix_scaler = torch.cuda.amp.GradScaler()
 
     # Set up the loss
-    critic = nn.CrossEntropyLoss()
+    critic = compute_loss_pos(args=args) if args['TYPE'] == 'Encoder' else compute_loss_cp2k(args=args)
 
     # Tracking the training stats and learning rate scheduling
     loss_best = 9999999
@@ -46,14 +82,17 @@ def train(model, optimizer, dataset, dataloader, args):
 
         for idx, (inputs, targets) in enumerate(bar):
             # send to device
-            inputs = inputs.to(args['DEVICE'])
-            targets = targets.to(args['DEVICE'])
+            inputs, targets = inputs.to(args['DEVICE']), targets.to(args['DEVICE'])
 
             # Make prediction
             with torch.cuda.amp.autocast():
                 # outputs = (model.recursive(inputs, args['DEVICE'])).permute(1, 2, 0)
-                outputs = (model(inputs, targets)).permute(1, 2, 0) # [seq, batch, features] -> [batch, features, seq]
-                loss = critic(outputs, targets[:, 1:])
+                # pred_targets = model(inputs).permute(1, 2, 0) # [seq, batch, features] -> [batch, features, seq]
+                # pred_cipher = (model(torch.cat([plains, keys], dim=1))).permute(1, 2, 0)
+
+                # loss = critic(pred_targets, targets)
+                loss, pred = critic(model, inputs, targets)
+
 
             # Update weights in mix precision
             optimizer.zero_grad()
@@ -85,7 +124,7 @@ def train(model, optimizer, dataset, dataloader, args):
                 model=model,
                 optimizer=optimizer,
                 args=args,
-                filename='lowest_loss.pt',
+                filename=f"{args['TYPE']}_lowest_loss.pt",
                 info=f"Epoch: {epoch + 1} Acc: {acc} Loss_avg: {loss_test}"
             )
             loss_best = loss_test
@@ -95,7 +134,7 @@ def train(model, optimizer, dataset, dataloader, args):
                 model=model,
                 optimizer=optimizer,
                 args=args,
-                filename='best_acc.pt',
+                filename=f"{args['TYPE']}_best_acc.pt",
                 info=f"Epoch: {epoch + 1} Acc: {acc} Loss_avg: {loss_test}"
             )
             acc_best = acc
@@ -128,34 +167,45 @@ def test(model, dataset, dataloader, critic, epoch, args):
 
     # Training loop
     for inputs, targets in dataloader:
-        inputs = inputs.to(args['DEVICE'])
-        targets = targets.to(args['DEVICE'])
+        # inputs = inputs.to(args['DEVICE'])
+        # targets = targets.to(args['DEVICE'])
+        inputs, targets = inputs.to(args['DEVICE']), targets.to(args['DEVICE'])
 
         # Compute loss
-        outputs = (model(inputs, targets)).permute(1, 2, 0)  # [seq, batch, features] -> [batch, features, seq]
+        # pred_targets = (model(inputs)).permute(1, 2, 0)  # [seq, batch, features] -> [batch, features, seq]
         # outputs = (model.recursive(inputs, args['DEVICE'], target_length=targets[:, 1:].shape[1])).permute(1, 2, 0)
-        loss = critic(outputs, targets[:, 1:])
+        # loss = critic(pred_targets, targets)
+        loss, pred_targets = critic(model, inputs, targets)
 
         # Compute metrics
-        outputs_indices = torch.argmax(outputs, dim=1)
-        mask = outputs_indices == targets[:, 1:]
+        outputs_indices = torch.argmax(pred_targets, dim=1)
+        mask = outputs_indices == targets
 
 
         # Track performance
         true_positive += mask.sum()
-        samples += mask.shape[0] * mask.shape[1]
+        samples += math.prod(mask.shape)
         loss_sum += loss.item()
 
     # print example
-    sample_input, sample_target = dataset.getsample()
-    sample_input, sample_target = sample_input.to(args['DEVICE']), sample_target.to(args['DEVICE'])
+    inputs, targets = dataset.getsample()
+    inputs, targets = inputs.to(args['DEVICE']), targets.to(args['DEVICE'])
     # sample_pred = torch.argmax(model.recursive(sample_input, args['DEVICE']), dim=2).T # [seq, batch, features] -> [batch, seq]
-    sample_pred = torch.argmax(model(sample_input, sample_target), dim=2).T
+    # sample_pred = torch.argmax((model(inputs)).permute(1, 0, 2), dim=-1)#torch.argmax(model(torch.cat([ciphers, keys], dim=1), plains), dim=2).T
+    _, sample_pred = critic(model, inputs, targets)
+    # sample_pred = torch.argmax(sample_pred, dim=-1)
     # Transfer tensor to string
-    sample_input_str = ''.join([dataset.indice_to_char[int(index)] for index in sample_input.squeeze(0)])
-    sample_decinput_str = ''.join([dataset.indice_to_char[int(index)] for index in sample_target[:, :-1].squeeze(0)])
-    sample_target_str = ''.join([dataset.indice_to_char[int(index)] for index in sample_target[:, 1:].squeeze(0)])
-    sample_pred_str = ''.join([dataset.indice_to_char[int(index)] for index in sample_pred.squeeze(0)])
+    sample_input_str = ''.join([dataset.indice_to_char[int(index)] for index in inputs.squeeze(0)])
+    # sample_decinput_str = ''.join([dataset.indice_to_char[int(index)] for index in targets.squeeze(0)])
+
+    if args['TYPE'] == 'Encoder':
+        sample_pred = torch.argmax(sample_pred, dim=1)
+        sample_target_str = ''.join([dataset.indice_to_char[int(index)] for index in targets.squeeze(0)])
+        sample_pred_str = ''.join([dataset.indice_to_char[int(index)] for index in sample_pred.squeeze(0)])
+    elif args['TYPE'] == 'CP2K':
+        sample_pred = torch.argmax(sample_pred, dim=1)
+        sample_target_str = targets.squeeze(0)
+        sample_pred_str = sample_pred.squeeze(0)
 
 
 
@@ -165,7 +215,6 @@ def test(model, dataset, dataloader, critic, epoch, args):
     print('\n===============')
     print(f"Epoch: {epoch + 1} \n"
           f"Input: {sample_input_str} \n"
-          f"Dec_input: {sample_decinput_str} \n"
           f"Ground truth: {sample_target_str} \n"
           f"Prediction:   {sample_pred_str} \n"
           f"Acc: {acc} \nLoss_avg: {loss_sum}")
@@ -176,12 +225,17 @@ def test(model, dataset, dataloader, critic, epoch, args):
 
 
 if __name__ == "__main__":
-    outputs_test = torch.randn(3, 300, 26)
-    print(torch.argmax(outputs_test, dim=1).shape)
-    print(torch.argmax(outputs_test, dim=1))
-    from config import args
+    pred_targets = torch.randn(size=(256,512,47))
+    targets = torch.randint(low=0, high=26, size=(256, 47))
 
-    l = lambda x: min(x ** -0.5, x * (args['WARMUP_STEP'] ** 1.5))
-    print(0.003 * l(400))
+    mask = torch.zeros(size=[47])
+    mask[7:30] = 1# Lower triangular matrix
+    mask = mask.bool()
+    # mask = mask.masked_fill(mask == 0, -9e3)  # Convert zeros to -inf
+    # mask = mask.masked_fill(mask == 1, float(0.0))  # Convert ones to 0
+    print(mask)
+    print(pred_targets[..., mask].shape)
+    print(targets[..., mask].shape)
 
+    print(torch.mean(pred_targets, dim=0).shape)
 

@@ -4,31 +4,33 @@ from time import gmtime, strftime
 args = {
     # Training
     'DEVICE': 'cuda',
-    'BATCH_SIZE' : 256,
-    'LEARNING_RATE' : 3e-4,#1 / (512 ** 0.5),
+    'BATCH_SIZE' : 512,
+    'LEARNING_RATE' : 3e-4,  #512 ** (-0.5),# ,
     'BETA1': 0.9,
     'BETA2': 0.98,
     'EPS': 1e-9,
-    'EPOCHS' : 1000,
-    'WARMUP_STEP': 4000,
+    'EPOCHS' : 5,
+    'WARMUP_STEP': 2000,
 
     # Model configuraion
+    'TYPE': 'CP2K', # 'Encoder' for sequence labeling Or 'CP2K' for text pair classification
     'LAYERS' : 6,
     'EMB_DIM' : 512,
     'HIDDEN': 2048,
-    'ATTN_HEAD': 8,
     'DROPOUT': 0.1,
 
-    # Transformer configuration
+    # Pretrained setting
+    'PRE_TRAINED_ENC': 'tensorboard/Sat03Jun2023144636/Encoder_best_acc.pt',
 
+    # Transformer configuration
+    'ATTN_HEAD': 8,
     # RNN Configuration
     'RNN_TYPE' : 'LSTM',
     'BIDIRECTION' : True,
 
     #Dataset configuraion
     'VOCAB_SIZE': 28, # Include 26 English Alphabet and <s> and </s>
-    'SEQ_LENGTH': 15, # Output length would be sequence length plus key length
-    'KEY_INPUT': True,
+    'SEQ_LENGTH': 40, # Output length would be sequence length plus key length
     'OUTPUT_LAYERS':-1, # Todo
 
     #Enigma configuraion
@@ -38,7 +40,7 @@ args = {
     'PLUGBOARD': 'AV BS CG DL FU HZ IN KM OW RX',
 
     # Loss configuration
-    'LOSS_TYPE': 'CROSS_ENTROPY',
+    'LOSS_TYPE': 'POS',
 
     # Log and checkpoint
     'LOG': os.path.join('tensorboard', strftime("%a%d%b%Y%H%M%S", gmtime())),
