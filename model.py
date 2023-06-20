@@ -18,20 +18,20 @@ class Encoder(nn.Module):
             nn.TransformerEncoderLayer(
                 d_model=args['EMB_DIM'],
                 nhead=args['ATTN_HEAD'],
-                dim_feedforward=args['HIDDEN']
+                dim_feedforward=args['FEED_DIM']
             ),
-            num_layers=args['LAYERS']
+            num_layers=args['ENC_LAYERS']
         )
 
         self.positional = nn.Parameter(torch.randn(2 * args['SEQ_LENGTH'] + 4, 1, args['EMB_DIM']))
         # self.output_positional = nn.Parameter(torch.randn(4, 1, args['EMB_DIM']))
 
-    def make_target_mask(self, size):
-        mask = torch.tril(torch.ones(size, size) == 1)  # Lower triangular matrix
-        mask = mask.float()
-        mask = mask.masked_fill(mask == 0, -9e3)  # Convert zeros to -inf
-        mask = mask.masked_fill(mask == 1, float(0.0))  # Convert ones to 0
-        return mask.to(self.device)
+    # def make_target_mask(self, size):
+    #     mask = torch.tril(torch.ones(size, size) == 1)  # Lower triangular matrix
+    #     mask = mask.float()
+    #     mask = mask.masked_fill(mask == 0, -9e3)  # Convert zeros to -inf
+    #     mask = mask.masked_fill(mask == 1, float(0.0))  # Convert ones to 0
+    #     return mask.to(self.device)
 
     def forward(self, inputs):
         # Obtian the batch number
@@ -44,6 +44,36 @@ class Encoder(nn.Module):
 
         outputs = self.enc(inputs)
         return outputs # Not return the hidden states here
+
+class RNN_encoder(nn.Module):
+    def __init__(self, args):
+        super().__init__()
+        self.emb = emb_permute(args=args)
+        if args['RNN_TYPE'] == 'LSTM':
+            self.enc = nn.LSTM(
+                input_size=args['EMB_DIM'],
+                hidden_size=args['HIDDEN'],
+                num_layers=args['LAYERS'],
+                dropout=args['DROPOUT'],
+                bidirectional=args['BIDIRECTION']
+            )
+
+        elif args['RNN_TYPE'] == 'GRU':
+            self.enc = nn.GRU(
+                input_size=args['EMB_DIM'],
+                hidden_size=args['HIDDEN'],
+                num_layers=args['LAYERS'],
+                dropout=args['DROPOUT'],
+                bidirectional=args['BIDIRECTION']
+            )
+
+        self.dropout = nn.Dropout(p=args['DROPOUT'])
+
+    def forward(self, x):
+        x = self.dropout(self.emb(x))
+        x, h_c = self.enc(x)
+
+        return x
 
     # def recursive(self, inputs, device, target_length=30):
     #     # Obtain the batch size
@@ -92,26 +122,57 @@ class cp_2_key_model(nn.Module):
         '''
         super(cp_2_key_model, self).__init__()
         # Load the pretrained decoder of initial a new one
+        self.linear_projectors = nn.ModuleList()
         if pre_trained_encoder is not None:
             self.encoder_wapper = pre_trained_encoder
-        else:
-            self.encoder_wapper = Encoder(args=args)
-        self.linear_projector = nn.Linear(args['EMB_DIM'], out_channels)
+            self.linear_projector = nn.Linear(args['EMB_DIM'], out_channels)
 
-    def forward(self, inputs):
-        inputs = self.encoder_wapper(inputs)
-        inputs = torch.mean(inputs, dim=0)
-        return self.linear_projector(inputs)
+        elif args['TYPE'] == 'CP2K':
+            self.encoder_wapper = Encoder(args=args)
+            self.linear_projector = nn.Linear(args['EMB_DIM'], out_channels)
+
+        elif args['TYPE'] == 'CP2K_RNN':
+            self.encoder_wapper = RNN_encoder(args)
+            for _ in range(3):
+                self.linear_projectors.append(
+                    nn.Linear(
+                        args['HIDDEN'] * 2 if args['BIDIRECTION'] else args['HIDDEN'], out_channels
+                    )
+                )
+        elif args['TYPE'] == 'CP2K_RNN_ENC':
+            self.encoder_wapper = nn.Sequential(
+                RNN_encoder(args),
+                nn.TransformerEncoder(
+                    nn.TransformerEncoderLayer(
+                        d_model=args['HIDDEN'] * 2 if args['BIDIRECTION'] else args['HIDDEN'],
+                        nhead=args['ATTN_HEAD'],
+                        dim_feedforward=args['FEED_DIM'],
+                        dropout=args['DROPOUT']
+                    ),
+                    num_layers=args['ENC_LAYERS']
+                )
+            )
+            for _ in range(3):
+                self.linear_projectors.append(
+                    nn.Linear(
+                        args['HIDDEN'] * 2 if args['BIDIRECTION'] else args['HIDDEN'], out_channels
+                    )
+                )
+            # self.linear_projector = nn.Linear(args['HIDDEN'] * 2 if args['BIDIRECTION'] else args['HIDDEN'],
+            #                                   out_channels)
+
+    def forward(self, x):
+        x = self.encoder_wapper(x)
+        x = torch.mean(x, dim=0)
+        return torch.stack([proj(x) for proj in self.linear_projectors], dim=0)
 
 
 
 
 
 if __name__ == "__main__":
-    mask = torch.tril(torch.ones(12, 12) == 1)  # Lower triangular matrix
-    mask = mask.float()
-    mask = mask.masked_fill(mask == 0, -9e3)  # Convert zeros to -inf
-    mask = mask.masked_fill(mask == 1, float(0.0))  # Convert ones to 0
-
-    print(mask)
-
+    from config import args
+    model = cp_2_key_model(args, out_channels=26)
+    print(torch.randint(low=0, high=4, size=[2, 82]))
+    output = model(torch.randint(low=0, high=4, size=[2, 6]))
+    print(output.shape)

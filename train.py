@@ -2,6 +2,7 @@ import math
 import torch
 import torch.optim as optim
 import torch.nn as nn
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 from utils import TensorboardLogger, save_checkpoint
 
@@ -17,7 +18,7 @@ def cycle_loss(model, ciphers, plains, keys):
 class compute_loss(nn.Module):
     def __init__(self, args):
         super(compute_loss, self).__init__()
-        self.ce = nn.CrossEntropyLoss()
+        self.ce = nn.CrossEntropyLoss(reduction='none')
 
 class compute_loss_pos(compute_loss):
     def __init__(self, args):
@@ -65,12 +66,17 @@ def train(model, optimizer, dataset, dataloader, args):
     mix_scaler = torch.cuda.amp.GradScaler()
 
     # Set up the loss
-    critic = compute_loss_pos(args=args) if args['TYPE'] == 'Encoder' else compute_loss_cp2k(args=args)
+    critic = compute_loss_pos(args=args)# if args['TYPE'] == 'Encoder' else compute_loss_cp2k(args=args)
 
     # Tracking the training stats and learning rate scheduling
     loss_best = 9999999
     acc_best = 0
     current_steps = 1
+
+    # Tracking process
+    true_positive = 0
+    samples = 0
+    loss_sum = 0
     # l = lambda current_steps: min(1 / (current_steps ** 0.5), current_steps * (args['WARMUP_STEP'] ** 1.5))
     # sceduler = optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=[l])
 
@@ -90,15 +96,26 @@ def train(model, optimizer, dataset, dataloader, args):
                 # pred_targets = model(inputs).permute(1, 2, 0) # [seq, batch, features] -> [batch, features, seq]
                 # pred_cipher = (model(torch.cat([plains, keys], dim=1))).permute(1, 2, 0)
 
-                # loss = critic(pred_targets, targets)
+                # compute the mean for optimizing and sum for logging
                 loss, pred = critic(model, inputs, targets)
+                loss_mean = loss.mean()
+                loss_add = loss.sum()
 
 
             # Update weights in mix precision
             optimizer.zero_grad()
-            mix_scaler.scale(loss).backward()
+            mix_scaler.scale(loss_mean).backward()
             mix_scaler.step(optimizer)
             mix_scaler.update()
+
+            # Compute metrics
+            outputs_indices = torch.argmax(pred, dim=1)
+            mask = outputs_indices == targets
+
+            # Track performance
+            true_positive += mask.sum()
+            samples += math.prod(mask.shape)
+            loss_sum += loss_add.item()
 
             # Learning rate scheduling
             # for g in optimizer.param_groups:
@@ -110,44 +127,73 @@ def train(model, optimizer, dataset, dataloader, args):
             bar.set_postfix(lr=optimizer.state_dict()['param_groups'][0]['lr'], steps=current_steps) if args['PROGRESS_BAR'] == 1 else None
 
             # Logging per iter
-            logger.update('loss_batch', loss.item())
+            logger.update('loss_batch', loss_add.item())
             logger.update('lr', optimizer.state_dict()['param_groups'][0]['lr'])
 
         # Logg after each epoch
-        with torch.no_grad():
-            acc, loss_test = test(model, dataset, dataloader, critic, epoch, args)
+
 
 
         # Saving the checkpoint
-        if loss_best >= loss_test:
-            save_checkpoint(
-                model=model,
-                optimizer=optimizer,
-                args=args,
-                filename=f"{args['TYPE']}_lowest_loss.pt",
-                info=f"Epoch: {epoch + 1} Acc: {acc} Loss_avg: {loss_test}"
-            )
-            loss_best = loss_test
+        if args['TEST'] == 1:
+            with torch.no_grad():
+                acc, loss_test = test(model, dataset, critic, epoch, args)
 
-        if acc_best <= acc:
-            save_checkpoint(
-                model=model,
-                optimizer=optimizer,
-                args=args,
-                filename=f"{args['TYPE']}_best_acc.pt",
-                info=f"Epoch: {epoch + 1} Acc: {acc} Loss_avg: {loss_test}"
-            )
-            acc_best = acc
+            if loss_best >= loss_test:
+                save_checkpoint(
+                    model=model,
+                    optimizer=optimizer,
+                    args=args,
+                    filename=f"{args['TYPE']}_lowest_loss.pt",
+                    info=f"Epoch: {epoch + 1} Acc: {acc} Loss_avg: {loss_test}"
+                )
+                loss_best = loss_test
+
+            if acc_best <= acc:
+                save_checkpoint(
+                    model=model,
+                    optimizer=optimizer,
+                    args=args,
+                    filename=f"{args['TYPE']}_best_acc.pt",
+                    info=f"Epoch: {epoch + 1} Acc: {acc} Loss_avg: {loss_test}"
+                )
+                acc_best = acc
 
 
-        # Logging per epoch
-        logger.update('Accuracy', acc)
-        logger.update('Loss_test', loss_test)
-        # logger.step()
+            # Logging per epoch
+            logger.update('Accuracy', acc)
+            logger.update('Loss_test', loss_test)
 
+        # compute the accuracy and print out the result
+        acc = true_positive / samples
+        logger.update('acc_train', acc)
+        logger.update('loss_avg_train', loss_sum)
+
+        print('\n===============')
+        print(f"Epoch: {epoch + 1} \n"
+              f"Acc: {acc} \nLoss_avg: {loss_sum}")
+        print('===============')
+
+        # Clear the record for the next epoch
+        true_positive = 0
+        samples = 0
+        loss_sum = 0
+
+
+
+
+
+        # Saving checkpoint
+        save_checkpoint(
+            model=model,
+            optimizer=optimizer,
+            args=args,
+            filename=f"{args['TYPE']}_ckpt.pt",
+            info=f"Epoch: {epoch + 1}"
+        )
     return model, optimizer
 
-def test(model, dataset, dataloader, critic, epoch, args):
+def test(model, dataset, critic, epoch, args):
     '''
     Calculate the accuracy and print some example
 
@@ -158,7 +204,10 @@ def test(model, dataset, dataloader, critic, epoch, args):
     :return:
     '''
 
+    # Change the dataset and model into test mode
+    # Dataset would gaves less amount of sample when testing
     model.eval()
+    dataset.setMode(mode='test')
 
     # Tracking process
     true_positive = 0
@@ -166,21 +215,21 @@ def test(model, dataset, dataloader, critic, epoch, args):
     loss_sum = 0
 
     # Training loop
+    dataloader = DataLoader(
+        dataset, batch_size=args['BATCH_SIZE'], shuffle=False, collate_fn=dataset.collate_fn_padding, drop_last=False
+    )
     for inputs, targets in dataloader:
         # inputs = inputs.to(args['DEVICE'])
         # targets = targets.to(args['DEVICE'])
         inputs, targets = inputs.to(args['DEVICE']), targets.to(args['DEVICE'])
 
         # Compute loss
-        # pred_targets = (model(inputs)).permute(1, 2, 0)  # [seq, batch, features] -> [batch, features, seq]
-        # outputs = (model.recursive(inputs, args['DEVICE'], target_length=targets[:, 1:].shape[1])).permute(1, 2, 0)
-        # loss = critic(pred_targets, targets)
-        loss, pred_targets = critic(model, inputs, targets)
+        with torch.cuda.amp.autocast():
+            loss, pred_targets = critic(model, inputs, targets)
 
         # Compute metrics
         outputs_indices = torch.argmax(pred_targets, dim=1)
         mask = outputs_indices == targets
-
 
         # Track performance
         true_positive += mask.sum()
@@ -190,8 +239,7 @@ def test(model, dataset, dataloader, critic, epoch, args):
     # print example
     inputs, targets = dataset.getsample()
     inputs, targets = inputs.to(args['DEVICE']), targets.to(args['DEVICE'])
-    # sample_pred = torch.argmax(model.recursive(sample_input, args['DEVICE']), dim=2).T # [seq, batch, features] -> [batch, seq]
-    # sample_pred = torch.argmax((model(inputs)).permute(1, 0, 2), dim=-1)#torch.argmax(model(torch.cat([ciphers, keys], dim=1), plains), dim=2).T
+
     _, sample_pred = critic(model, inputs, targets)
     # sample_pred = torch.argmax(sample_pred, dim=-1)
     # Transfer tensor to string
@@ -202,21 +250,29 @@ def test(model, dataset, dataloader, critic, epoch, args):
         sample_pred = torch.argmax(sample_pred, dim=1)
         sample_target_str = ''.join([dataset.indice_to_char[int(index)] for index in targets.squeeze(0)])
         sample_pred_str = ''.join([dataset.indice_to_char[int(index)] for index in sample_pred.squeeze(0)])
-    elif args['TYPE'] == 'CP2K':
+    elif args['TYPE'] == 'CP2K' or 'CP2K_RNN':
         sample_pred = torch.argmax(sample_pred, dim=1)
-        sample_target_str = int(targets.squeeze(0))
-        sample_pred_str = int(sample_pred.squeeze(0))
 
-        sample_target_str = ''.join([dataset.indice_to_char[int(char)] for char in dataset.initial_state_dict[sample_target_str]])
-        sample_pred_str = ''.join([dataset.indice_to_char[int(char)] for char in dataset.initial_state_dict[sample_pred_str]])
+        sample_target_str = ''.join([dataset.indice_to_char[int(index)] for index in targets.squeeze(0)])
+        sample_pred_str = ''.join([dataset.indice_to_char[int(index)] for index in sample_pred.squeeze(0)])
+        # sample_target_str = int(targets.squeeze(0))
+        # sample_pred_str = int(sample_pred.squeeze(0))
+        #
+        # sample_target_str = ''.join([dataset.indice_to_char[int(char)] for char in dataset.initial_state_dict[sample_target_str]])
+        # sample_pred_str = ''.join([dataset.indice_to_char[int(char)] for char in dataset.initial_state_dict[sample_pred_str]])
 
 
 
     acc = true_positive / samples
     loss_sum /= mask.shape[0]
+
+    #
     model.train()
+    dataset.setMode(mode='train')
+
+
     print('\n===============')
-    print(f"Epoch: {epoch + 1} \n"
+    print(f"Testing...\n"
           f"Input: {sample_input_str} \n"
           f"Ground truth: {sample_target_str} \n"
           f"Prediction:   {sample_pred_str} \n"
