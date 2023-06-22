@@ -4,7 +4,7 @@ from time import gmtime, strftime
 args = {
     # Training hyperparameters
     'DEVICE': 'cuda',
-    'BATCH_SIZE' : 256,
+    'BATCH_SIZE' : 512,
     'LEARNING_RATE' : 3e-4,  #512 ** (-0.5),# ,
     'BETA1': 0.9,
     'BETA2': 0.98,
@@ -14,7 +14,7 @@ args = {
     'NUM_WORKERS': 1,
 
     # Model configuraion
-    'TYPE': 'CP2K_RNN', # 'Encoder' for sequence labeling Or 'CP2K' for text pair classification 'CP2K_RNN' 'CP2K_RNN_ENC'
+    'TYPE': 'CP2K_RNN_ENC', # 'Encoder' for sequence labeling Or 'CP2K' for text pair classification 'CP2K_RNN' 'CP2K_RNN_ENC'
                         # 'CP2K_RNN' for text pair classification with RNN. 'CP2K_RNN_ENC' for text pair classification with RNN and transformer encoder
 
     # RNN's configuration
@@ -40,7 +40,7 @@ args = {
     'SEQ_LENGTH': 40, # Output length would be sequence length plus key length
     'LIMITED_KEYS_START': 0,
     'LIMITED_KEYS_END': -1, # 17576 if using all key pairs
-    'LIMITED_KEYS_STEP': int(17576 // 40), # int(17576 // num_key_pairs)
+    'LIMITED_KEYS_STEP': int(17576 // 1000), # int(17576 // num_key_pairs)
     'SAMPLES_PER_KEYS': 800,
 
     'OUTPUT_LAYERS':-1, # Todo
