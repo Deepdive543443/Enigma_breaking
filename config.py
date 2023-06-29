@@ -10,7 +10,7 @@ args = {
     'BETA2': 0.98,
     'EPS': 1e-9,
     'EPOCHS' : 2000,
-    'WARMUP_STEP': 15000,
+    'WARMUP_STEP': 8000,
     'NUM_WORKERS': 4,
 
     # Model configuraion
@@ -56,7 +56,7 @@ args = {
 
     # Log and checkpoint
     'LOG': os.path.join('tensorboard', strftime("%a%d%b%Y%H%M%S", gmtime())),
-    'LOAD_CKPT': 'tensorboard/Thu29Jun2023122123/CP2K_RNN_ENC_ckpt.pt', # Paste the path of checkpoint here
+    'LOAD_CKPT': None, #'tensorboard/Thu29Jun2023122123/CP2K_RNN_ENC_ckpt.pt', # Paste the path of checkpoint here
 
     # Batch mode(cluster mode)
     'USE_COMPILE': 0,
