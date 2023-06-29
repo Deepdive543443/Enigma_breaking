@@ -244,9 +244,9 @@ if __name__ == "__main__":
     args['TYPE'] = 'CP2K_RNN_ENC'
 
     dataset = Enigma_simulate_cp_2_k_limited(args=args)
-    length = len(dataset.initial_state)
-    print(length)
-    print(dataset.initial_state)
+    # length = len(dataset.initial_state)
+    # print(length)
+    # print(dataset.initial_state)
     # print(len(dataset.initial_state))
     # print(dataset.initial_state[::length // 3])
     # print(len(dataset.initial_state[::10]))
@@ -260,11 +260,14 @@ if __name__ == "__main__":
     model = cp_2_key_model(args=args, out_channels=26)
     for inputs, targets in dataloader:
         print(inputs.shape, targets.shape, targets)
-        preds = model(inputs)
-        print(preds.shape)
-        print((torch.argmax(preds, dim=2).T).shape)
+        # preds = model(inputs)
+        # print(preds.shape)
+        # print((torch.argmax(preds, dim=2).T).shape)
         break
 
+    for inputs, targets in dataloader:
+        print(inputs.shape, targets.shape, targets)
+        break
     # dataset2 = Enigma_simulate_dataset(args=args)
     # print(len(dataset2.initial_state))
     # print(len(dataset2.initial_state) // 4)

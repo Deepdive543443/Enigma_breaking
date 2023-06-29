@@ -53,12 +53,15 @@ def launch_tensorboard(tracking_address):
     except Exception:
         return None
 
-def save_checkpoint(model, optimizer, args, info, filename):
+def save_checkpoint(model, optimizer, mix_scaler, current_steps, current_epochs, args, info, filename):
     log_path = os.path.join(args['LOG'], filename)
     torch.save(
         {
             'weights': model.state_dict(),
             'optimizer': optimizer.state_dict(),
+            'mix_scaler': mix_scaler.state_dict(),
+            'current_steps': current_steps,
+            'current_epochs': current_epochs,
             'args': args,
             'info': info
         },
@@ -82,15 +85,21 @@ def load_checkpoint(filename):
     if ckpt_args['TYPE'] == 'Encoder':
         model = Encoder(ckpt_args)
 
-    elif ckpt_args['TYPE'] == 'CP2K':
-        model = cp_2_key_model
+    elif ckpt_args['TYPE'] == 'CP2K' or 'CP2K_RNN' or 'CP2K_RNN_ENC':
+        model = cp_2_key_model(args=ckpt_args, out_channels=26, pre_trained_encoder=None)
 
     model.load_state_dict(ckpt['weights'])
     model.to(ckpt_args['DEVICE'])
 
     optimizer = optim.Adam(model.parameters(), lr=ckpt_args['LEARNING_RATE'], betas=[ckpt_args['BETA1'], ckpt_args['BETA1']], eps=ckpt_args['EPS'])
     optimizer.load_state_dict(ckpt['optimizer'])
-    return model, optimizer, ckpt_args
+
+    mix_scaler = torch.cuda.amp.GradScaler()
+    mix_scaler.load_state_dict(ckpt['mix_scaler'])
+
+    current_steps = ckpt['current_steps']
+    current_epochs = ckpt['current_epochs']
+    return model, optimizer, current_steps, current_epochs, mix_scaler, ckpt_args
 
 if __name__ == "__main__":
     # log = TensorboardLogger()

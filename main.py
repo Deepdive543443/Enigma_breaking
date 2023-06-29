@@ -18,11 +18,6 @@ if __name__ == '__main__':
 
     args = vars(ap.parse_args())
 
-    # Print the configuration
-    print("Config: ")
-    for k, v in args.items():
-        print(f"{k}: {v}")
-
     # Launch tensorboard
     if args['TENSORBOARD'] == 1:
         url = launch_tensorboard('tensorboard')
@@ -58,32 +53,46 @@ if __name__ == '__main__':
             if args['PRE_TRAINED_ENC'] is not None:
                 # Start training on a pretrained Encoder
                 pretrained_enc, _, _ = load_checkpoint(args['PRE_TRAINED_ENC'])
-                model = cp_2_key_model(args=args, out_channels=dataset.tags_num(), pre_trained_encoder=pretrained_enc)
+                model = cp_2_key_model(args=args, out_channels=26, pre_trained_encoder=pretrained_enc)
             else:
                 #Initialize a new model
-                model = cp_2_key_model(args=args, out_channels=dataset.tags_num(), pre_trained_encoder=None)
+                model = cp_2_key_model(args=args, out_channels=26, pre_trained_encoder=None)
 
         model.to(args['DEVICE'])
         optimizer = optim.Adam(params=model.parameters(), lr=args['LEARNING_RATE'], betas=(args['BETA1'], args['BETA1']), eps=args['EPS'])
+        mix_scaler = torch.cuda.amp.GradScaler()
+
+        # Tracking training step for optimization
+        initial_step = 0
+        initial_epoch = 0
+
     else:
         # Continue training on previous weights and optimizer setting
         # This would also overwrite the current args by the one
-        model, optimizer, _ = load_checkpoint(args['LOAD_CKPT'])
+        model, optimizer, initial_step, initial_epoch, mix_scaler,  _ = load_checkpoint(args['LOAD_CKPT'])
 
     # Use Torch.compile()
     # This features require pytorch 2.0
     if args['USE_COMPILE'] != 0:
         model = torch.compile(model)
 
+    # Print the configuration
+    print("Config: ")
+    for k, v in args.items():
+        print(f"{k}: {v}")
+
 
 
     # Training loop
-    print('\nStart training...\n')
+    print(f'\nStart training from epoch: {initial_epoch}  Step:{initial_step}\n')
     train(
         model=model,
         optimizer=optimizer,
         dataset=dataset,
         dataloader=dataloader,
+        initial_step=initial_step,
+        initial_epoch=initial_epoch,
+        mix_scaler=mix_scaler,
         args=args
     )
 

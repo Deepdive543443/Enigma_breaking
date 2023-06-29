@@ -48,7 +48,7 @@ class compute_loss_cp2k(compute_loss):
 
 
 
-def train(model, optimizer, dataset, dataloader, args):
+def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mix_scaler, args):
     '''
     config the training pipeline.
 
@@ -63,7 +63,7 @@ def train(model, optimizer, dataset, dataloader, args):
 
     # Setting the optimizer
     # optimizer = optim.Adam(params=model.parameters(), lr=args['LEARNING_RATE'])
-    mix_scaler = torch.cuda.amp.GradScaler()
+    # mix_scaler = torch.cuda.amp.GradScaler()
 
     # Set up the loss
     critic = compute_loss_pos(args=args)# if args['TYPE'] == 'Encoder' else compute_loss_cp2k(args=args)
@@ -71,7 +71,7 @@ def train(model, optimizer, dataset, dataloader, args):
     # Tracking the training stats and learning rate scheduling
     loss_best = 9999999
     acc_best = 0
-    current_steps = 1
+    current_steps = initial_step
 
     # Tracking process
     true_positive = 0
@@ -118,12 +118,12 @@ def train(model, optimizer, dataset, dataloader, args):
             loss_sum += loss_add.item()
 
             # Learning rate scheduling
-            # for g in optimizer.param_groups:
-            #     g['lr'] = args['LEARNING_RATE'] * min(pow(current_steps, -0.5), current_steps * pow(args['WARMUP_STEP'], -1.5))
+            for g in optimizer.param_groups:
+                g['lr'] = min(args['LEARNING_RATE'], current_steps * (args['LEARNING_RATE'] / args['WARMUP_STEP']))#args['LEARNING_RATE'] * min(pow(current_steps, -0.5), current_steps * pow(args['WARMUP_STEP'], -1.5))
             current_steps += 1
 
             # Bar
-            bar.set_description(f"Epoch[{epoch + 1}/{args['EPOCHS']}]") if args['PROGRESS_BAR'] == 1 else None
+            bar.set_description(f"Epoch[{epoch + initial_epoch + 1}/{args['EPOCHS']}]") if args['PROGRESS_BAR'] == 1 else None
             bar.set_postfix(lr=optimizer.state_dict()['param_groups'][0]['lr'], steps=current_steps) if args['PROGRESS_BAR'] == 1 else None
 
             # Logging per iter
@@ -170,7 +170,8 @@ def train(model, optimizer, dataset, dataloader, args):
         logger.update('loss_avg_train', loss_sum)
 
         print('\n===============')
-        print(f"Epoch: {epoch + 1} \n"
+        print(f"Epoch: {epoch + initial_epoch + 1} \n"
+              f"current step: {current_steps}\n"
               f"Acc: {acc} \nLoss_avg: {loss_sum}")
         print('===============')
 
@@ -181,15 +182,16 @@ def train(model, optimizer, dataset, dataloader, args):
 
 
 
-
-
         # Saving checkpoint
         save_checkpoint(
             model=model,
             optimizer=optimizer,
+            mix_scaler=mix_scaler,
+            current_steps=current_steps,
+            current_epochs = epoch + initial_epoch,
             args=args,
             filename=f"{args['TYPE']}_ckpt.pt",
-            info=f"Epoch: {epoch + 1}"
+            info=f"Epoch: {epoch + initial_epoch + 1}"
         )
     return model, optimizer
 
