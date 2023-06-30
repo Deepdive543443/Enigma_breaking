@@ -61,6 +61,10 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
     # Set up tensorboard logger
     logger = TensorboardLogger(args)
 
+    # Setting the optimizer
+    # optimizer = optim.Adam(params=model.parameters(), lr=args['LEARNING_RATE'])
+    # mix_scaler = torch.cuda.amp.GradScaler()
+
     # Set up the loss
     critic = compute_loss_pos(args=args)# if args['TYPE'] == 'Encoder' else compute_loss_cp2k(args=args)
 
@@ -73,8 +77,9 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
     true_positive = 0
     samples = 0
     loss_sum = 0
+    # l = lambda current_steps: min(1 / (current_steps ** 0.5), current_steps * (args['WARMUP_STEP'] ** 1.5))
+    # sceduler = optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=[l])
 
-    # Training loop
     for epoch in range(args['EPOCHS']):
         if args['PROGRESS_BAR'] == 1:
             bar = tqdm(dataloader, leave=True)
@@ -87,6 +92,10 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
 
             # Make prediction
             with torch.cuda.amp.autocast():
+                # outputs = (model.recursive(inputs, args['DEVICE'])).permute(1, 2, 0)
+                # pred_targets = model(inputs).permute(1, 2, 0) # [seq, batch, features] -> [batch, features, seq]
+                # pred_cipher = (model(torch.cat([plains, keys], dim=1))).permute(1, 2, 0)
+
                 # compute the mean for optimizing and sum for logging
                 loss, pred = critic(model, inputs, targets)
                 loss_mean = loss.mean()
@@ -108,7 +117,7 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
             samples += math.prod(mask.shape)
             loss_sum += loss_add.item()
 
-            # Warm up learning rate
+            # Learning rate scheduling
             for g in optimizer.param_groups:
                 g['lr'] = min(args['LEARNING_RATE'], current_steps * (args['LEARNING_RATE'] / args['WARMUP_STEP']))#args['LEARNING_RATE'] * min(pow(current_steps, -0.5), current_steps * pow(args['WARMUP_STEP'], -1.5))
             current_steps += 1
@@ -121,8 +130,12 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
             logger.update('loss_batch', loss_add.item())
             logger.update('lr', optimizer.state_dict()['param_groups'][0]['lr'])
 
+        # Logg after each epoch
+
+
+
         # Saving the checkpoint
-        if args['TEST'] ==  1:
+        if args['TEST'] == 1:
             with torch.no_grad():
                 acc, loss_test = test(model, dataset, critic, epoch, args)
 
@@ -167,6 +180,8 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
         samples = 0
         loss_sum = 0
 
+
+
         # Saving checkpoint
         save_checkpoint(
             model=model,
@@ -178,7 +193,6 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
             filename=f"{args['TYPE']}_ckpt.pt",
             info=f"Epoch: {epoch + initial_epoch + 1}"
         )
-
     return model, optimizer
 
 def test(model, dataset, critic, epoch, args):

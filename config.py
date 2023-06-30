@@ -37,7 +37,7 @@ args = {
 
     #Dataset configuraion
     'VOCAB_SIZE': 28, # Include 26 English Alphabet and <s> and </s>
-    'SEQ_LENGTH': 15, # Output length would be sequence length plus key length
+    'SEQ_LENGTH': 40, # Output length would be sequence length plus key length
     'LIMITED_KEYS_START': 0,
     'LIMITED_KEYS_END': -1, # 17576 if using all key pairs
     'LIMITED_KEYS_STEP': 1, # int(17576 // num_key_pairs)
