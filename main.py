@@ -4,7 +4,7 @@ from utils import launch_tensorboard, save_checkpoint, load_checkpoint
 
 import torch
 optim = torch.optim
-from model import Encoder, cp_2_key_model
+from model import Encoder, cp_2_key_model, cp_2_k_mask
 from dataset import Enigma_simulate_c_2_p, Enigma_simulate_cp_2_k_limited, Enigma_simulate_cp_2_k
 from torch.utils.data import DataLoader
 import argparse
@@ -53,10 +53,10 @@ if __name__ == '__main__':
             if args['PRE_TRAINED_ENC'] is not None:
                 # Start training on a pretrained Encoder
                 pretrained_enc, _, _ = load_checkpoint(args['PRE_TRAINED_ENC'])
-                model = cp_2_key_model(args=args, out_channels=26, pre_trained_encoder=pretrained_enc)
+                model = cp_2_k_mask(args=args, out_channels=26)
             else:
                 #Initialize a new model
-                model = cp_2_key_model(args=args, out_channels=26, pre_trained_encoder=None)
+                model = cp_2_k_mask(args=args, out_channels=26)
 
         model.to(args['DEVICE'])
         optimizer = optim.Adam(params=model.parameters(), lr=args['LEARNING_RATE'], betas=(args['BETA1'], args['BETA1']), eps=args['EPS'])

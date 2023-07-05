@@ -28,7 +28,7 @@ class compute_loss_pos(compute_loss):
         # self.mask = self.mask.bool().to(args['DEVICE'])
 
     def forward(self, model, inputs, targets):
-        pred_targets = model(inputs).permute(1, 2, 0)
+        pred_targets = model(inputs).permute(1, 2, 0) # []
         # pred_targets = pred_targets[..., self.mask]
         # targets = targets[..., self.mask]
 
@@ -39,10 +39,15 @@ class compute_loss_cp2k(compute_loss):
     def __init__(self, args):
         super().__init__(args)
 
-    def forward(self, model, inputs, targets):
-        pred_targets = model(inputs)
-        loss = self.ce(pred_targets, targets)
-        return loss, pred_targets
+    def forward(self, model, inputs, targets, masks):
+        loss = []
+        pred_targets = model(inputs, masks)
+        for i, pred in enumerate(pred_targets): # pred: [rotor, seq, batch, out_channels] targets: [rotor, seq, batch] mask: [batch, seq]
+            # Applying mask
+            loss.append(self.ce(pred[~masks.T], targets[i][~masks.T])) # pred -> [batch, out_channels, seq] targets[i].T: [batch, seq]
+        # pred_targets = model(inputs)
+        # loss = self.ce(pred_targets, targets)
+        return sum(loss), pred_targets
 
 
 
@@ -61,12 +66,8 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
     # Set up tensorboard logger
     logger = TensorboardLogger(args)
 
-    # Setting the optimizer
-    # optimizer = optim.Adam(params=model.parameters(), lr=args['LEARNING_RATE'])
-    # mix_scaler = torch.cuda.amp.GradScaler()
-
     # Set up the loss
-    critic = compute_loss_pos(args=args)# if args['TYPE'] == 'Encoder' else compute_loss_cp2k(args=args)
+    critic = compute_loss_cp2k(args=args)# if args['TYPE'] == 'Encoder' else compute_loss_cp2k(args=args)
 
     # Tracking the training stats and learning rate scheduling
     loss_best = 9999999
@@ -77,27 +78,22 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
     true_positive = 0
     samples = 0
     loss_sum = 0
-    # l = lambda current_steps: min(1 / (current_steps ** 0.5), current_steps * (args['WARMUP_STEP'] ** 1.5))
-    # sceduler = optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=[l])
 
+    # Training loop
     for epoch in range(args['EPOCHS']):
         if args['PROGRESS_BAR'] == 1:
             bar = tqdm(dataloader, leave=True)
         else:
             bar = dataloader
 
-        for idx, (inputs, targets) in enumerate(bar):
+        for idx, (inputs, targets, masks) in enumerate(bar):
             # send to device
-            inputs, targets = inputs.to(args['DEVICE']), targets.to(args['DEVICE'])
+            inputs, targets, masks = inputs.to(args['DEVICE']), targets.to(args['DEVICE']), masks.to(args['DEVICE'])
 
             # Make prediction
             with torch.cuda.amp.autocast():
-                # outputs = (model.recursive(inputs, args['DEVICE'])).permute(1, 2, 0)
-                # pred_targets = model(inputs).permute(1, 2, 0) # [seq, batch, features] -> [batch, features, seq]
-                # pred_cipher = (model(torch.cat([plains, keys], dim=1))).permute(1, 2, 0)
-
                 # compute the mean for optimizing and sum for logging
-                loss, pred = critic(model, inputs, targets)
+                loss, pred = critic(model, inputs, targets, masks) # pred: [rotor, seq, batch, out_channels]
                 loss_mean = loss.mean()
                 loss_add = loss.sum()
 
@@ -109,15 +105,26 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
             mix_scaler.update()
 
             # Compute metrics
-            outputs_indices = torch.argmax(pred, dim=1)
-            mask = outputs_indices == targets
+            # for rotor in range(targets.shape[0]):
+            #     outputs_indices = torch.argmax(pred[rotor][~masks.T]) == targets[rotor][~masks.T]
+            #     true_positive += outputs_indices.sum()
+            #     samples += math.prod(outputs_indices.shape)
 
-            # Track performance
-            true_positive += mask.sum()
-            samples += math.prod(mask.shape)
-            loss_sum += loss_add.item()
+            outputs_indices = torch.argmax(pred, dim=-1) # -> [rotor, seq, batch]
+            for rotor in range(outputs_indices.shape[0]):
+                mask = outputs_indices[rotor][~masks.T] == targets[rotor][~masks.T]
+                true_positive += mask.sum()
+                samples += math.prod(mask.shape)
 
-            # Learning rate scheduling
+
+            # mask = outputs_indices[~masks.T] == targets[~masks.T]
+            #
+            # # Track performance
+            # true_positive += mask.sum()
+            # samples += math.prod(mask.shape)
+            loss_sum += (loss_add.item() / len(dataset))
+
+            # Warm up learning rate
             for g in optimizer.param_groups:
                 g['lr'] = min(args['LEARNING_RATE'], current_steps * (args['LEARNING_RATE'] / args['WARMUP_STEP']))#args['LEARNING_RATE'] * min(pow(current_steps, -0.5), current_steps * pow(args['WARMUP_STEP'], -1.5))
             current_steps += 1
@@ -130,12 +137,8 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
             logger.update('loss_batch', loss_add.item())
             logger.update('lr', optimizer.state_dict()['param_groups'][0]['lr'])
 
-        # Logg after each epoch
-
-
-
         # Saving the checkpoint
-        if args['TEST'] == 1:
+        if args['TEST'] ==  1:
             with torch.no_grad():
                 acc, loss_test = test(model, dataset, critic, epoch, args)
 
@@ -180,8 +183,6 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
         samples = 0
         loss_sum = 0
 
-
-
         # Saving checkpoint
         save_checkpoint(
             model=model,
@@ -193,6 +194,7 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
             filename=f"{args['TYPE']}_ckpt.pt",
             info=f"Epoch: {epoch + initial_epoch + 1}"
         )
+
     return model, optimizer
 
 def test(model, dataset, critic, epoch, args):

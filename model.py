@@ -4,7 +4,7 @@ nn = torch.nn
 class emb_permute(nn.Module):
     def __init__(self, args):
         super(emb_permute, self).__init__()
-        self.emb = nn.Embedding(args['VOCAB_SIZE'], args['EMB_DIM'])
+        self.emb = nn.Embedding(args['VOCAB_SIZE'] * 2, args['EMB_DIM'])
 
     def forward(self, indices):
         return self.emb(indices).permute(1, 0, 2)
@@ -48,7 +48,8 @@ class Encoder(nn.Module):
 class RNN_encoder(nn.Module):
     def __init__(self, args):
         super().__init__()
-        self.emb = emb_permute(args=args)
+        # self.emb = emb_permute(args=args)
+        self.emb = nn.Linear(args['VOCAB_SIZE'] * 2, args['EMB_DIM'])
         if args['RNN_TYPE'] == 'LSTM':
             self.enc = nn.LSTM(
                 input_size=args['EMB_DIM'],
@@ -162,9 +163,39 @@ class cp_2_key_model(nn.Module):
             #                                   out_channels)
 
     def forward(self, x):
-        x = self.encoder_wapper(x)
-        x = torch.mean(x, dim=0)
-        return torch.stack([proj(x) for proj in self.linear_projectors], dim=0)
+        x = self.encoder_wapper(x) # [seq, batch, feats]
+        # x = torch.mean(x, dim=0) # -> [batch, feats]
+        return torch.stack([proj(x) for proj in self.linear_projectors]) # -> [3, seq, batch, out_channels]
+
+class cp_2_k_mask(nn.Module):
+    def __init__(self, args, out_channels):
+        super(cp_2_k_mask, self).__init__()
+
+        # RNN and Transformer encoder
+        self.rnn = RNN_encoder(args)
+        self.transformer_enc = nn.TransformerEncoder(
+                    nn.TransformerEncoderLayer(
+                        d_model=args['HIDDEN'] * 2 if args['BIDIRECTION'] else args['HIDDEN'],
+                        nhead=args['ATTN_HEAD'],
+                        dim_feedforward=args['FEED_DIM'],
+                        dropout=args['DROPOUT']
+                    ),
+                    num_layers=args['ENC_LAYERS']
+                )
+
+        # Fully connected layers for the final outputs
+        self.linear_projectors = nn.ModuleList()
+        for _ in range(3):
+            self.linear_projectors.append(
+                nn.Linear(
+                    args['HIDDEN'] * 2 if args['BIDIRECTION'] else args['HIDDEN'], out_channels
+                )
+            )
+
+    def forward(self, x, masks):
+        x = self.rnn(x)
+        x = self.transformer_enc(x, src_key_padding_mask=masks)
+        return torch.stack([proj(x) for proj in self.linear_projectors]) # -> [3, seq, batch, out_channels]
 
 
 
