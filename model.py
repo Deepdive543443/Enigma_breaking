@@ -49,7 +49,7 @@ class RNN_encoder(nn.Module):
     def __init__(self, args):
         super().__init__()
         # self.emb = emb_permute(args=args)
-        self.emb = nn.Linear(args['VOCAB_SIZE'] * 2, args['EMB_DIM'])
+        # self.emb = nn.Linear(args['VOCAB_SIZE'] * 2, args['EMB_DIM'])
         if args['RNN_TYPE'] == 'LSTM':
             self.enc = nn.LSTM(
                 input_size=args['EMB_DIM'],
@@ -70,8 +70,8 @@ class RNN_encoder(nn.Module):
 
         self.dropout = nn.Dropout(p=args['DROPOUT'])
 
-    def forward(self, x):
-        x = self.dropout(self.emb(x))
+    def forward(self, x, **kwargs):
+        # x = self.dropout(self.emb(x))
         x, h_c = self.enc(x)
 
         return x
@@ -167,35 +167,99 @@ class cp_2_key_model(nn.Module):
         # x = torch.mean(x, dim=0) # -> [batch, feats]
         return torch.stack([proj(x) for proj in self.linear_projectors]) # -> [3, seq, batch, out_channels]
 
+# class cp_2_k_mask(nn.Module):
+#     def __init__(self, args, out_channels):
+#         super(cp_2_k_mask, self).__init__()
+#
+#         # RNN and Transformer encoder
+#         self.rnn = RNN_encoder(args)
+#         self.transformer_enc = nn.TransformerEncoder(
+#                     nn.TransformerEncoderLayer(
+#                         d_model=args['HIDDEN'] * 2 if args['BIDIRECTION'] else args['HIDDEN'],
+#                         nhead=args['ATTN_HEAD'],
+#                         dim_feedforward=args['FEED_DIM'],
+#                         dropout=args['DROPOUT']
+#                     ),
+#                     num_layers=args['ENC_LAYERS']
+#                 )
+#
+#         # Fully connected layers for the final outputs
+#         self.linear_projectors = nn.ModuleList()
+#         for _ in range(3):
+#             self.linear_projectors.append(
+#                 nn.Linear(
+#                     args['HIDDEN'] * 2 if args['BIDIRECTION'] else args['HIDDEN'], out_channels
+#                 )
+#             )
+#
+#     def forward(self, x, masks):
+#         x = self.rnn(x)
+#         x = self.transformer_enc(x, src_key_padding_mask=masks)
+#         return torch.stack([proj(x) for proj in self.linear_projectors]) # -> [3, seq, batch, out_channels]
+
+
 class cp_2_k_mask(nn.Module):
     def __init__(self, args, out_channels):
         super(cp_2_k_mask, self).__init__()
+        self.out_channels = out_channels
+        self.rotor_num = len(args['ROTOR'].split(' '))
 
-        # RNN and Transformer encoder
-        self.rnn = RNN_encoder(args)
-        self.transformer_enc = nn.TransformerEncoder(
+        self.networks = nn.ModuleList()
+        self.linear_projectors = nn.ModuleList()
+
+        # Embedding (zeros if there exists LSTM layers)
+        if args['LAYERS'] == 0:
+            self.position_emb = nn.Parameter(torch.randn(args['EMB_DIM'] * 2)).to(args['DEVICE'])
+        else:
+            self.position_emb = torch.zeros(args['SEQ_LENGTH'][1], 1, args['EMB_DIM']).to(args['DEVICE'])
+
+        self.emb = nn.Linear(args['VOCAB_SIZE'] * 2, args['EMB_DIM'] if args['LAYERS'] > 0 else args['EMB_DIM'] * 2)
+
+        # Dropout
+        self.dropout = nn.Dropout(p=args['DROPOUT'])
+
+        # Adding LSTM layers
+        if args['LAYERS'] > 0:
+            self.networks.append(RNN_encoder(args))
+
+        # Adding Transformer layers
+        if args['ENC_LAYERS'] > 0:
+            self.networks.append(nn.TransformerEncoder(
                     nn.TransformerEncoderLayer(
-                        d_model=args['HIDDEN'] * 2 if args['BIDIRECTION'] else args['HIDDEN'],
+                        d_model=args['HIDDEN'] * 2,
                         nhead=args['ATTN_HEAD'],
                         dim_feedforward=args['FEED_DIM'],
                         dropout=args['DROPOUT']
                     ),
                     num_layers=args['ENC_LAYERS']
-                )
+                ))
 
-        # Fully connected layers for the final outputs
-        self.linear_projectors = nn.ModuleList()
+
+        # linear projectors for predictions
         for _ in range(3):
             self.linear_projectors.append(
                 nn.Linear(
-                    args['HIDDEN'] * 2 if args['BIDIRECTION'] else args['HIDDEN'], out_channels
+                    args['HIDDEN'] * 2, out_channels
                 )
             )
 
     def forward(self, x, masks):
-        x = self.rnn(x)
-        x = self.transformer_enc(x, src_key_padding_mask=masks)
-        return torch.stack([proj(x) for proj in self.linear_projectors]) # -> [3, seq, batch, out_channels]
+        # Embedding
+        x = self.dropout(self.emb(x))
+
+        # Obtain the length of dimension
+        seq, batch, features = x.shape
+
+        # Adding the position embedding
+        x = x + self.position_emb[:seq].repeat(1, batch, 1)
+
+        # forwarding
+        for layer in self.networks:
+            x = layer(x, src_key_padding_mask=masks)
+
+        # predictions
+        # return self.linear_projectors(x).view(3, seq, batch, self.out_channels)
+        return torch.stack([proj(x) for proj in self.linear_projectors])  # -> [3, seq, batch, out_channels]
 
 
 
@@ -203,7 +267,6 @@ class cp_2_k_mask(nn.Module):
 
 if __name__ == "__main__":
     from config import args
-    model = cp_2_key_model(args, out_channels=26)
-    print(torch.randint(low=0, high=4, size=[2, 82]))
-    output = model(torch.randint(low=0, high=4, size=[2, 6]))
-    print(output.shape)
+    sample = torch.randn(args['SEQ_LENGTH'][1], 1, args['VOCAB_SIZE'] * 2)
+    print(sample.shape)
+    print(sample.repeat(1, 5, 1).shape)

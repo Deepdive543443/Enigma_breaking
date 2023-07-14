@@ -8,6 +8,7 @@ from model import Encoder, cp_2_key_model, cp_2_k_mask
 from dataset import Enigma_simulate_c_2_p, Enigma_simulate_cp_2_k_limited, Enigma_simulate_cp_2_k
 from torch.utils.data import DataLoader
 import argparse
+import numpy as np
 
 
 if __name__ == '__main__':
@@ -49,7 +50,7 @@ if __name__ == '__main__':
         if args['TYPE'] == 'Encoder':
             # Training a new Encoder
             model = Encoder(args=args)
-        elif args['TYPE'] == 'CP2K' or 'CP2K_RNN':
+        elif args['TYPE'] == 'CP2K' or args['TYPE'] == 'CP2K_RNN_ENC':
             if args['PRE_TRAINED_ENC'] is not None:
                 # Start training on a pretrained Encoder
                 pretrained_enc, _, _ = load_checkpoint(args['PRE_TRAINED_ENC'])
@@ -66,21 +67,29 @@ if __name__ == '__main__':
         initial_step = 0
         initial_epoch = 0
 
+        # Use Torch.compile()
+        # This features require pytorch 2.0
+        if args['USE_COMPILE'] != 0:
+            model = torch.compile(model)
+
     else:
         # Continue training on previous weights and optimizer setting
         # This would also overwrite the current args by the one
         model, optimizer, initial_step, initial_epoch, mix_scaler,  _ = load_checkpoint(args['LOAD_CKPT'])
 
-    # Use Torch.compile()
-    # This features require pytorch 2.0
-    if args['USE_COMPILE'] != 0:
-        model = torch.compile(model)
+
 
     # Print the configuration
     print("Config: ")
     for k, v in args.items():
         print(f"{k}: {v}")
 
+    # print parameters
+    count_param = 0
+    for p in model.parameters():
+        count_param += np.prod(p.shape)
+
+    print(f'Parameters: {count_param}')
 
 
     # Training loop

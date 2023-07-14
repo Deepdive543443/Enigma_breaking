@@ -18,16 +18,16 @@ args = {
                         # 'CP2K_RNN' for text pair classification with RNN. 'CP2K_RNN_ENC' for text pair classification with RNN and transformer encoder
 
     # RNN's configuration
-    'LAYERS' : 2,
-    'EMB_DIM' : 300,
-    'HIDDEN': 300,
+    'LAYERS': 2,
+    'EMB_DIM': 256,
+    'HIDDEN': 256,
     'DROPOUT': 0.2,
-    'RNN_TYPE' : 'LSTM',
-    'BIDIRECTION' : True,
+    'RNN_TYPE': 'LSTM',
+    'BIDIRECTION': True,
 
     # Transformer encoder configuration
     'ENC_LAYERS' : 2,
-    'FEED_DIM': 1200,
+    'FEED_DIM': 1024,
     'ATTN_HEAD': 8,
     # Pretrained setting
 
@@ -37,7 +37,7 @@ args = {
 
     #Dataset configuraion
     'VOCAB_SIZE': 26, # Include 26 English Alphabet and <s> and </s>
-    'SEQ_LENGTH': [4, 45], # Output length would be sequence length plus key length
+    'SEQ_LENGTH': [30, 30], # Output length would be sequence length plus key length
     'LIMITED_KEYS_START': 0,
     'LIMITED_KEYS_END': 17576, # 17576 if using all key pairs
     'LIMITED_KEYS_STEP': 1, # int(17576 // num_key_pairs)
@@ -56,7 +56,7 @@ args = {
 
     # Log and checkpoint
     'LOG': os.path.join('tensorboard', strftime("%a%d%b%Y%H%M%S", gmtime())),
-    'LOAD_CKPT': None, #'tensorboard/Thu29Jun2023122123/CP2K_RNN_ENC_ckpt.pt', # Paste the path of checkpoint here
+    'LOAD_CKPT': None,#'tensorboard/Wed05Jul2023104232/CP2K_RNN_ENC_ckpt.pt', #'tensorboard/Thu29Jun2023122123/CP2K_RNN_ENC_ckpt.pt', # Paste the path of checkpoint here
 
     # Batch mode(cluster mode)
     'USE_COMPILE': 0,

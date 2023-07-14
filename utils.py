@@ -1,7 +1,7 @@
 import torch
 from torch.utils.tensorboard import SummaryWriter
 import os, json
-from model import Encoder, cp_2_key_model
+from model import Encoder, cp_2_key_model, cp_2_k_mask
 from tensorboard import program
 
 optim = torch.optim
@@ -85,8 +85,12 @@ def load_checkpoint(filename):
     if ckpt_args['TYPE'] == 'Encoder':
         model = Encoder(ckpt_args)
 
-    elif ckpt_args['TYPE'] == 'CP2K' or 'CP2K_RNN' or 'CP2K_RNN_ENC':
-        model = cp_2_key_model(args=ckpt_args, out_channels=26, pre_trained_encoder=None)
+    elif ckpt_args['TYPE'] == 'CP2K' or ckpt_args['TYPE'] == 'CP2K_RNN' or ckpt_args['TYPE'] == 'CP2K_RNN_ENC':
+        model = cp_2_k_mask(args=ckpt_args, out_channels=26)
+
+    if ckpt_args['USE_COMPILE'] != 0:
+        model = torch.compile(model)
+
 
     model.load_state_dict(ckpt['weights'])
     model.to(ckpt_args['DEVICE'])
