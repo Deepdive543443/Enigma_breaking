@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras import layers
+layers = keras.layers
+# from tensorflow.keras import layers
 import keras_nlp
 import numpy as np
 
