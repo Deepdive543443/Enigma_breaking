@@ -209,7 +209,7 @@ class cp_2_k_mask(nn.Module):
 
         # Embedding (zeros if there exists LSTM layers)
         if args['LAYERS'] == 0:
-            self.position_emb = nn.Parameter(torch.randn(args['EMB_DIM'] * 2)).to(args['DEVICE'])
+            self.position_emb = nn.Parameter(torch.randn(args['SEQ_LENGTH'][1], 1, args['EMB_DIM'] * 2)).to(args['DEVICE'])
         else:
             self.position_emb = torch.zeros(args['SEQ_LENGTH'][1], 1, args['EMB_DIM']).to(args['DEVICE'])
 
@@ -236,12 +236,13 @@ class cp_2_k_mask(nn.Module):
 
 
         # linear projectors for predictions
-        for _ in range(3):
-            self.linear_projectors.append(
-                nn.Linear(
-                    args['HIDDEN'] * 2, out_channels
-                )
-            )
+        self.linear_projectors = nn.Linear(args['HIDDEN'] * 2, out_channels * 3)
+        # for _ in range(3):
+        #     self.linear_projectors.append(
+        #         nn.Linear(
+        #             args['HIDDEN'] * 2, out_channels
+        #         )
+        #     )
 
     def forward(self, x, masks):
         # Embedding
@@ -258,8 +259,8 @@ class cp_2_k_mask(nn.Module):
             x = layer(x, src_key_padding_mask=masks)
 
         # predictions
-        # return self.linear_projectors(x).view(3, seq, batch, self.out_channels)
-        return torch.stack([proj(x) for proj in self.linear_projectors])  # -> [3, seq, batch, out_channels]
+        return self.linear_projectors(x).view(seq, batch, 3, self.out_channels).permute(2, 0, 1, 3)
+        # return torch.stack([proj(x) for proj in self.linear_projectors])  # -> [3, seq, batch, out_channels]
 
 
 
