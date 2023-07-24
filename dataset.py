@@ -1,4 +1,3 @@
-import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
 from enigma.machine import EnigmaMachine
@@ -172,13 +171,13 @@ class Enigma_simulate_cp_2_k(Enigma_simulate_dataset):
 
 
 class Enigma_simulate_cp_2_k_limited(Enigma_simulate_dataset):
-    def __init__(self, args, mode='train'):
+    def __init__(self, args, mode='train', seed=114514):
         super().__init__(args)
         # Using limited key with number of sample being set
         self.initial_state = self.initial_state[args['LIMITED_KEYS_START']:args['LIMITED_KEYS_END']:args['LIMITED_KEYS_STEP']]  #* sample_num
 
         # Given different number for training and testing
-        self.initial_state_test = self.initial_state * (args['SAMPLES_PER_KEYS'] // 2)
+        self.initial_state_test = self.initial_state * 2
         self.initial_state_train = self.initial_state * args['SAMPLES_PER_KEYS']
 
         # Initial state dictionary
@@ -187,6 +186,11 @@ class Enigma_simulate_cp_2_k_limited(Enigma_simulate_dataset):
 
         # Setting up mode
         self.initial_state = self.initial_state_train if mode == 'train' else self.initial_state_test
+
+        # Fix seed if dataset is in test mode
+        if mode == 'test':
+            torch.manual_seed(seed)
+            random.seed(seed)
 
     def setMode(self, mode='test'):
         '''

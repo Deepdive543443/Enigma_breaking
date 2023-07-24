@@ -209,9 +209,9 @@ class cp_2_k_mask(nn.Module):
 
         # Embedding (zeros if there exists LSTM layers)
         if args['LAYERS'] == 0:
-            self.position_emb = nn.Parameter(torch.randn(args['SEQ_LENGTH'][1], 1, args['EMB_DIM'] * 2)).to(args['DEVICE'])
+            self.position_emb = nn.Parameter(torch.randn(100, 1, args['EMB_DIM'] * 2)).to(args['DEVICE'])
         else:
-            self.position_emb = torch.zeros(args['SEQ_LENGTH'][1], 1, args['EMB_DIM']).to(args['DEVICE'])
+            self.position_emb = torch.zeros(100, 1, args['EMB_DIM']).to(args['DEVICE'])
 
         self.emb = nn.Linear(args['VOCAB_SIZE'] * 2, args['EMB_DIM'] if args['LAYERS'] > 0 else args['EMB_DIM'] * 2)
 
