@@ -4,7 +4,7 @@ from utils import launch_tensorboard, save_checkpoint, load_checkpoint
 
 import torch
 optim = torch.optim
-from model import Encoder, cp_2_key_model, cp_2_k_mask
+from model import Encoder, cp_2_k_mask
 from dataset import Enigma_simulate_c_2_p, Enigma_simulate_cp_2_k_limited, Enigma_simulate_cp_2_k
 from torch.utils.data import DataLoader
 import argparse

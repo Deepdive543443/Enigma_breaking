@@ -1,7 +1,7 @@
 import torch
 from torch.utils.tensorboard import SummaryWriter
 import os, json
-from model import Encoder, cp_2_key_model, cp_2_k_mask
+from model import Encoder, cp_2_k_mask
 from tensorboard import program
 
 optim = torch.optim
