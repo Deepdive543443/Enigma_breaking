@@ -49,6 +49,7 @@ class Enigma_simulate_dataset(Dataset):
         states_indice = torch.LongTensor([[self.char_to_indice[char] for char in state] for state in states[:-1]])
         return plaintext_indice, cipher_text_indice, states_indice, plaintext, ciphertext, states
 
+
     def __len__(self):
         return len(self.initial_state)
 
@@ -211,45 +212,39 @@ class Enigma_simulate_cp_2_k_limited(Enigma_simulate_dataset):
 
         plaintext_indice, cipher_text_indice, states_indice, plaintext, ciphertext, states = self.get_cipher_plain_positions(index, rand_length)
 
-        #
-        # plaintext_indice = torch.randint(low=0, high=25, size=[rand_length])
-        # plaintext = ''.join([self.indice_to_char[int(char)] for char in plaintext_indice])
-        # # print(plaintext)
-        #
-        # # Obtain the intial position from product
-        # initial_position_indice = self.initial_state[index]
-        # initial_position = ''.join([self.indice_to_char[int(char)] for char in initial_position_indice])
-        # # initial_position_indice = [ for char in initial_position]
-        #
-        # # setting the enigma
-        # self.enigma_machine.set_display(initial_position)
-        #
-        # # transfer plaintext to ciphertext
-        # cipher_text = self.enigma_machine.process_text(plaintext)
-        # cipher_text_indice = torch.LongTensor([self.char_to_indice[char] for char in cipher_text])
-
         # Transfer indices to vectors
         plaintext_text_vector = torch.zeros(plaintext_indice.shape[0], 26)
         plaintext_text_vector[torch.arange(plaintext_indice.shape[0]), plaintext_indice] = 1
 
         cipher_text_vector = torch.zeros(cipher_text_indice.shape[0], 26)
         cipher_text_vector[torch.arange(cipher_text_indice.shape[0]), cipher_text_indice] = 1
-        # Sequential initial states
-        # states = []
-        # state_index = self.initial_state_dict_reverse[initial_position_indice]
-        #
-        # for i in range(state_index, state_index + rand_length):
-        #     states.append(self.initial_state_dict[i]) if i <= 17575 else states.append(self.initial_state_dict[i - 17576])
-        #
-        # # Return an integer tensor in shape [seq, rotor]
-        # Sequential_states = torch.LongTensor(states)
 
-        # Return mask for different length of inputs
         mask = torch.zeros(rand_length)
 
 
         return torch.cat([cipher_text_vector, plaintext_text_vector], dim=1), states_indice, mask
                #torch.LongTensor([self.initial_state_2_idx[self.initial_state[index]]])
+
+    def cipher_plain_text_2_tensor(self, ciphertext, plaintext):
+        # Length checking
+
+        if len(ciphertext) != len(plaintext):
+            raise Exception("ciphertext's length needs to match with plaintext")
+
+        # transfer both text into list of integers
+        ciphertext_indice = torch.LongTensor([self.char_to_indice[char] for char in ciphertext.upper()])
+        plaintext_indice = torch.LongTensor([self.char_to_indice[char] for char in plaintext.upper()])
+
+        # Transfer indices into one-hot vectors
+        plaintext_text_vector = torch.zeros(plaintext_indice.shape[0], 26)
+        plaintext_text_vector[torch.arange(plaintext_indice.shape[0]), plaintext_indice] = 1
+
+        cipher_text_vector = torch.zeros(ciphertext_indice.shape[0], 26)
+        cipher_text_vector[torch.arange(ciphertext_indice.shape[0]), ciphertext_indice] = 1
+
+        # Mask that useless during testing.
+        mask = torch.zeros(len(ciphertext))
+        return torch.cat([cipher_text_vector, plaintext_text_vector], dim=1).unsqueeze(1), mask.unsqueeze(0)
 
     def tags_num(self):
         return 26
