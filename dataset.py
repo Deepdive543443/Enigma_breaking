@@ -225,27 +225,6 @@ class Enigma_simulate_cp_2_k_limited(Enigma_simulate_dataset):
         return torch.cat([cipher_text_vector, plaintext_text_vector], dim=1), states_indice, mask
                #torch.LongTensor([self.initial_state_2_idx[self.initial_state[index]]])
 
-    def cipher_plain_text_2_tensor(self, ciphertext, plaintext):
-        # Length checking
-
-        if len(ciphertext) != len(plaintext):
-            raise Exception("ciphertext's length needs to match with plaintext")
-
-        # transfer both text into list of integers
-        ciphertext_indice = torch.LongTensor([self.char_to_indice[char] for char in ciphertext.upper()])
-        plaintext_indice = torch.LongTensor([self.char_to_indice[char] for char in plaintext.upper()])
-
-        # Transfer indices into one-hot vectors
-        plaintext_text_vector = torch.zeros(plaintext_indice.shape[0], 26)
-        plaintext_text_vector[torch.arange(plaintext_indice.shape[0]), plaintext_indice] = 1
-
-        cipher_text_vector = torch.zeros(ciphertext_indice.shape[0], 26)
-        cipher_text_vector[torch.arange(ciphertext_indice.shape[0]), ciphertext_indice] = 1
-
-        # Mask that useless during testing.
-        mask = torch.zeros(len(ciphertext))
-        return torch.cat([cipher_text_vector, plaintext_text_vector], dim=1).unsqueeze(1), mask.unsqueeze(0)
-
     def tags_num(self):
         return 26
 
@@ -275,7 +254,31 @@ class Enigma_simulate_cp_2_k_limited(Enigma_simulate_dataset):
         c, p = c.unsqueeze(0), p.unsqueeze(0)
         return c, p
         
-    
+
+def cipher_plain_text_2_tensor(ciphertext, plaintext):
+    # Length checking
+
+    if len(ciphertext) != len(plaintext):
+        raise Exception("ciphertext's length needs to match with plaintext")
+
+    # Dictionary for transfering char to index
+    char_to_indice = {chr(ord('A') + i): i for i in range(26)}
+
+
+    # transfer both text into list of integers
+    ciphertext_indice = torch.LongTensor([char_to_indice[char] for char in ciphertext.upper()])
+    plaintext_indice = torch.LongTensor([char_to_indice[char] for char in plaintext.upper()])
+
+    # Transfer indices into one-hot vectors
+    plaintext_text_vector = torch.zeros(plaintext_indice.shape[0], 26)
+    plaintext_text_vector[torch.arange(plaintext_indice.shape[0]), plaintext_indice] = 1
+
+    cipher_text_vector = torch.zeros(ciphertext_indice.shape[0], 26)
+    cipher_text_vector[torch.arange(ciphertext_indice.shape[0]), ciphertext_indice] = 1
+
+    # Mask that useless during testing.
+    mask = torch.zeros(len(ciphertext))
+    return torch.cat([cipher_text_vector, plaintext_text_vector], dim=1).unsqueeze(1), mask.unsqueeze(0)
 
 
 

@@ -104,24 +104,12 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
             mix_scaler.step(optimizer)
             mix_scaler.update()
 
-            # Compute metrics
-            # for rotor in range(targets.shape[0]):
-            #     outputs_indices = torch.argmax(pred[rotor][~masks.T]) == targets[rotor][~masks.T]
-            #     true_positive += outputs_indices.sum()
-            #     samples += math.prod(outputs_indices.shape)
-
             outputs_indices = torch.argmax(pred, dim=-1) # -> [rotor, seq, batch]
             for rotor in range(outputs_indices.shape[0]):
                 mask = outputs_indices[rotor][~masks.T] == targets[rotor][~masks.T]
                 true_positive += mask.sum()
                 samples += math.prod(mask.shape)
 
-
-            # mask = outputs_indices[~masks.T] == targets[~masks.T]
-            #
-            # # Track performance
-            # true_positive += mask.sum()
-            # samples += math.prod(mask.shape)
             loss_sum += (loss_add.item() / len(dataset))
 
             # Warm up learning rate
@@ -137,7 +125,8 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
             logger.update('loss_batch', loss_add.item())
             logger.update('lr', optimizer.state_dict()['param_groups'][0]['lr'])
 
-        # Saving the checkpoint
+
+        # Testing
         if args['TEST'] ==  1:
             with torch.no_grad():
                 acc, loss_test = test(model, dataset, critic, epoch, args)
@@ -167,15 +156,16 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
             logger.update('Accuracy', acc)
             logger.update('Loss_test', loss_test)
 
+
         # compute the accuracy and print out the result
-        acc = true_positive / samples
-        logger.update('acc_train', acc)
+        acc_train = true_positive / samples
+        logger.update('acc_train', acc_train)
         logger.update('loss_avg_train', loss_sum)
 
         print('\n===============')
         print(f"Epoch: {epoch + initial_epoch + 1} \n"
               f"current step: {current_steps}\n"
-              f"Acc: {acc} \nLoss_avg: {loss_sum}")
+              f"Acc_train: {acc_train} \nLoss_avg: {loss_sum}")
         print('===============')
 
         # Clear the record for the next epoch
