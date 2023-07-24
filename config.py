@@ -18,7 +18,7 @@ args = {
                         # 'CP2K_RNN' for text pair classification with RNN. 'CP2K_RNN_ENC' for text pair classification with RNN and transformer encoder
 
     # RNN's configuration
-    'LAYERS': 1,
+    'LAYERS': 2,
     'EMB_DIM': 256,
     'HIDDEN': 256,
     'DROPOUT': 0.2,
@@ -26,7 +26,7 @@ args = {
     'BIDIRECTION': True,
 
     # Transformer encoder configuration
-    'ENC_LAYERS' : 3,
+    'ENC_LAYERS' : 2,
     'FEED_DIM': 1024,
     'ATTN_HEAD': 8,
     # Pretrained setting
