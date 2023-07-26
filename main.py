@@ -5,7 +5,7 @@ from utils import launch_tensorboard, save_checkpoint, load_checkpoint
 import torch
 optim = torch.optim
 from model import Encoder, cp_2_k_mask
-from dataset import Enigma_simulate_c_2_p, Enigma_simulate_cp_2_k_limited, Enigma_simulate_cp_2_k
+from dataset import Enigma_simulate_c_2_p, Enigma_simulate_cp_2_k_limited, Random_setting_dataset
 from torch.utils.data import DataLoader
 import argparse
 import numpy as np
@@ -26,12 +26,14 @@ if __name__ == '__main__':
 
 
 
-    # Setting dataset and loader
-    if args['TYPE'] == 'Encoder':
-        dataset = Enigma_simulate_c_2_p(args=args)
-    elif args['TYPE'] == 'CP2K' or 'CP2K_RNN':
-        dataset = Enigma_simulate_cp_2_k_limited(args=args)
-        # dataset = Enigma_simulate_cp_2_k(args=args)
+    # # Setting dataset and loader
+    # if args['TYPE'] == 'Encoder':
+    #     dataset = Enigma_simulate_c_2_p(args=args)
+    # elif args['TYPE'] == 'CP2K' or 'CP2K_RNN':
+    #     dataset = Enigma_simulate_cp_2_k_limited(args=args)
+    #     # dataset = Enigma_simulate_cp_2_k(args=args)
+
+    dataset = Random_setting_dataset(args=args)
 
 
 

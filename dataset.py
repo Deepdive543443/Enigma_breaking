@@ -13,7 +13,8 @@ class Enigma_simulate_dataset(Dataset):
             rotors='II IV V',
             reflector='B',
             ring_settings=[1, 20, 11],
-            plugboard_settings='AV BS CG DL FU HZ IN KM OW RX'
+            plugboard_settings='AV BS CG DL FU HZ IN KM OW RX',
+
         )
 
         self.seq_length = args['SEQ_LENGTH']
@@ -281,47 +282,72 @@ def cipher_plain_text_2_tensor(ciphertext, plaintext):
     return torch.cat([cipher_text_vector, plaintext_text_vector], dim=1).unsqueeze(1), mask.unsqueeze(0)
 
 
+class Random_setting_dataset(Enigma_simulate_dataset):
+    def __init__(self, args):
+        super(Random_setting_dataset, self).__init__(args)
+        self.batchsize = args['BATCH_SIZE']
 
 
-if __name__ == "__main__":
-    from config import args
-    from model import cp_2_k_mask
-    from torch.utils.data import DataLoader
-    from torchsummary import summary
+    def make_key_sheet(self):
+        key_sheet = {
+            'rotors' : 'II IV V',
+            'reflector' : 'B',
+            'ring_settings' : [1, 20, 11],
+            'plugboard_settings' : 'AV BS CG DL FU HZ IN KM OW RX'
+        }
 
-    args['TYPE'] = 'CP2K_RNN_ENC'
-    args['DEVICE'] = 'cpu'
+        # TBA
 
-    dataset = Enigma_simulate_cp_2_k_limited(args=args)
-    dataloader = DataLoader(
-        dataset=dataset,
-        batch_size=1,
-        collate_fn=dataset.collate_fn_padding,
-        shuffle=True
-    )
-    print(dataset.tags_num())
-    model = cp_2_k_mask(args=args, out_channels=26)
-    for inputs, targets, mask in dataloader:
-        outputs = model(inputs, mask)
-        print(inputs.shape, targets.shape, mask.shape, outputs.shape)
-        print(targets[1][~mask.T].shape, outputs[1][~mask.T].shape)
-        summary(model, [inputs, mask])
-        count_param = 0
-        for p in model.parameters():
-            count_param += np.prod(p.shape)
-        print(count_param)
-        # print(targets[1].T[mask].shape, mask)
-        break
-    # print(random.randint(35, 36))
+        # random reflector
 
-    # states = []
-    # for i in range(5, 5 + 6):
-    #     states.append(dataset.initial_state_dict[i])
-    # print(torch.Tensor(states).T)
+        # random ring setting
 
-    # dataset2 = Enigma_simulate_dataset(args=args)
-    # print(len(dataset2.initial_state))
-    # print(len(dataset2.initial_state) // 4)
-    # print(dataset2.initial_state[::len(dataset2.initial_state) // 4])
+        # random rotors
 
-   
+        # Random plugboard
+
+
+        return key_sheet
+
+    def __len__(self):
+        return self.batchsize * 500
+
+    def collate_fn_padding(self, batch):
+        # Each item in batch (input, target)
+        inputs_batch = []
+        targets_batch = []
+        mask_batch = []
+
+        for inputs, targets, masks in batch:
+            inputs_batch.append(inputs)
+            targets_batch.append(targets)
+            mask_batch.append(masks)
+
+        # Merge list of sentences into a batch with padding
+
+        inputs_batch = pad_sequence(inputs_batch)
+        targets_batch = pad_sequence(targets_batch, batch_first=True).permute(2, 1, 0) # [seq, rotor] -> [batch, seq, rotor] -> [rotor, seq, batch]
+        mask_batch = pad_sequence(mask_batch, batch_first=True, padding_value=1).bool() # -> [seq, batch]
+
+        # Transfer back to [batch, indice]
+        return inputs_batch, targets_batch, mask_batch
+
+    def __getitem__(self, index):
+        # Generate a random sequence with random length
+        rand_length = random.randint(self.seq_length[0], self.seq_length[1])
+        rand_states = random.randint(0, 17575)
+
+        plaintext_indice, cipher_text_indice, states_indice, plaintext, ciphertext, states = self.get_cipher_plain_positions(rand_states, rand_length)
+
+        # Transfer indices to vectors
+        plaintext_text_vector = torch.zeros(plaintext_indice.shape[0], 26)
+        plaintext_text_vector[torch.arange(plaintext_indice.shape[0]), plaintext_indice] = 1
+
+        cipher_text_vector = torch.zeros(cipher_text_indice.shape[0], 26)
+        cipher_text_vector[torch.arange(cipher_text_indice.shape[0]), cipher_text_indice] = 1
+
+        mask = torch.zeros(rand_length)
+
+
+        return torch.cat([cipher_text_vector, plaintext_text_vector], dim=1), states_indice, mask
+
