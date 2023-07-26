@@ -129,6 +129,22 @@ class cp_2_k_mask(nn.Module):
         # return torch.stack([proj(x) for proj in self.linear_projectors])  # -> [3, seq, batch, out_channels]
 
 
+class cp_2_k_onnx(cp_2_k_mask):
+    def __init__(self, args, out_channels):
+        super().__init__(args, out_channels)
+
+    def forward(self, x):
+        # Embedding
+        x = self.dropout(self.emb(x))
+
+        seq, batch, features = x.shape
+
+        # forwarding
+        for layer in self.networks:
+            x = layer(x)
+
+        # predictions
+        return self.linear_projectors(x).view(seq, batch, 3, self.out_channels).permute(2, 0, 1, 3)
 
 
 
