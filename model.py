@@ -105,7 +105,6 @@ class cp_2_k_mask(nn.Module):
                     num_layers=args['ENC_LAYERS']
                 ))
 
-
         # linear projectors for predictions
         self.linear_projectors = nn.Linear(args['HIDDEN'] * 2, out_channels * 3)
 
