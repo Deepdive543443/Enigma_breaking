@@ -50,6 +50,25 @@ class compute_loss_cp2k(compute_loss):
         return sum(loss), pred_targets
 
 
+class compute_loss_cp2_further(nn.Module):
+    def __init__(self, args):
+        super().__init__()
+        self.ce = nn.CrossEntropyLoss()
+
+    def forward(self, model, inputs, targets, masks, further_experiment_targets):
+        loss = []
+        # fur_loss = []
+        pred_targets, pred_further_targets = model(inputs, masks)
+        for i, pred in enumerate(pred_targets): # pred: [rotor, seq, batch, out_channels] targets: [rotor, seq, batch] mask: [batch, seq]
+            # Applying mask
+            loss.append(self.ce(pred[~masks.T], targets[i][~masks.T])) # pred -> [batch, out_channels, seq] targets[i].T: [batch, seq]
+
+        for idx, pred in enumerate(pred_further_targets):
+            insss, inssss = pred, further_experiment_targets[idx]
+            mins, maxs = torch.min(further_experiment_targets[idx]), torch.max(further_experiment_targets[idx])
+            loss.append(self.ce(pred, further_experiment_targets[idx]))
+        return sum(loss), pred_targets, pred_further_targets
+
 
 
 
@@ -67,7 +86,7 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
     logger = TensorboardLogger(args)
 
     # Set up the loss
-    critic = compute_loss_cp2k(args=args)# if args['TYPE'] == 'Encoder' else compute_loss_cp2k(args=args)
+    critic = compute_loss_cp2_further(args=args) # Loss for further experiment
 
     # Tracking the training stats and learning rate scheduling
     loss_best = 9999999
@@ -79,6 +98,22 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
     samples = 0
     loss_sum = 0
 
+    # Further experiment acc
+    metric_tags_fur = []
+    if args['Random_rotors_num'] is not None:
+        metric_tags_fur.append('rotor')
+
+    if args['Random_reflector'] is not None:
+        metric_tags_fur.append('reflector')
+
+    if args['Random_ringsetting_num'] is not None:
+        metric_tags_fur.append('ringsetting')
+
+    if args['Random_plugboard_num'] is not None:
+        metric_tags_fur.append('plugboard')
+
+    Fur_acc = [[0, 0] for _ in range(len(metric_tags_fur))]
+
     # Training loop
     for epoch in range(args['EPOCHS']):
         if args['PROGRESS_BAR'] == 1:
@@ -86,76 +121,62 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
         else:
             bar = dataloader
 
-        for idx, (inputs, targets, masks) in enumerate(bar):
+        for idx, (inputs, targets, masks, further_experiment_targets) in enumerate(bar):
             # send to device
             inputs, targets, masks = inputs.to(args['DEVICE']), targets.to(args['DEVICE']), masks.to(args['DEVICE'])
+            for fur_idx in range(len(further_experiment_targets)):
+                further_experiment_targets[fur_idx] = further_experiment_targets[fur_idx].to(args['DEVICE'])
 
             # Make prediction
             with torch.cuda.amp.autocast():
                 # compute the mean for optimizing and sum for logging
-                loss, pred = critic(model, inputs, targets, masks) # pred: [rotor, seq, batch, out_channels]
-                loss_mean = loss.mean()
-                loss_add = loss.sum()
-
+                loss, pred, fur_pred = critic(model, inputs, targets, masks, further_experiment_targets) # pred: [rotor, seq, batch, out_channels]
 
             # Update weights in mix precision
             optimizer.zero_grad()
-            mix_scaler.scale(loss_mean).backward()
+            mix_scaler.scale(loss).backward()
             mix_scaler.step(optimizer)
             mix_scaler.update()
 
+            # Warm up learning rate
+            for g in optimizer.param_groups:
+                g['lr'] = min(args['LEARNING_RATE'], current_steps * (args['LEARNING_RATE'] / args[
+                    'WARMUP_STEP']))  # args['LEARNING_RATE'] * min(pow(current_steps, -0.5), current_steps * pow(args['WARMUP_STEP'], -1.5))
+            current_steps += 1
+
+
+            # Rotor acc
             outputs_indices = torch.argmax(pred, dim=-1) # -> [rotor, seq, batch]
             for rotor in range(outputs_indices.shape[0]):
                 mask = outputs_indices[rotor][~masks.T] == targets[rotor][~masks.T]
                 true_positive += mask.sum()
                 samples += math.prod(mask.shape)
 
-            loss_sum += (loss_add.item() / len(dataset))
+            # Fur experiment acc
+            for idx, pred in enumerate(fur_pred):
+                mask = torch.argmax(pred, dim=1) == further_experiment_targets[idx]
+                Fur_acc[idx][0] += mask.sum()
+                Fur_acc[idx][1] += math.prod(mask.shape)
 
-            # Warm up learning rate
-            for g in optimizer.param_groups:
-                g['lr'] = min(args['LEARNING_RATE'], current_steps * (args['LEARNING_RATE'] / args['WARMUP_STEP']))#args['LEARNING_RATE'] * min(pow(current_steps, -0.5), current_steps * pow(args['WARMUP_STEP'], -1.5))
-            current_steps += 1
+            loss_sum += loss.item()
+
 
             # Bar
             bar.set_description(f"Epoch[{epoch + initial_epoch + 1}/{args['EPOCHS']}]") if args['PROGRESS_BAR'] == 1 else None
             bar.set_postfix(lr=optimizer.state_dict()['param_groups'][0]['lr'], steps=current_steps) if args['PROGRESS_BAR'] == 1 else None
 
             # Logging per iter
-            logger.update('loss_batch', loss_add.item())
+            logger.update('loss_batch', loss.item())
             logger.update('lr', optimizer.state_dict()['param_groups'][0]['lr'])
 
 
         # Testing
-        if args['TEST'] ==  1:
-            with torch.no_grad():
-                acc, loss_test = test(model, dataset, critic, epoch, args)
-
-            if loss_best >= loss_test:
-                save_checkpoint(
-                    model=model,
-                    optimizer=optimizer,
-                    args=args,
-                    filename=f"{args['TYPE']}_lowest_loss.pt",
-                    info=f"Epoch: {epoch + 1} Acc: {acc} Loss_avg: {loss_test}"
-                )
-                loss_best = loss_test
-
-            if acc_best <= acc:
-                save_checkpoint(
-                    model=model,
-                    optimizer=optimizer,
-                    args=args,
-                    filename=f"{args['TYPE']}_best_acc.pt",
-                    info=f"Epoch: {epoch + 1} Acc: {acc} Loss_avg: {loss_test}"
-                )
-                acc_best = acc
+        # pass
 
 
-            # Logging per epoch
-            logger.update('Accuracy', acc)
-            logger.update('Loss_test', loss_test)
-
+        # Logging further experiment result
+        for idx, result in enumerate(Fur_acc):
+            logger.update(metric_tags_fur[idx]+' Accuracy', result[0] / result[1])
 
         # compute the accuracy and print out the result
         acc_train = true_positive / samples
@@ -165,13 +186,17 @@ def train(model, optimizer, dataset, dataloader, initial_step, initial_epoch, mi
         print('\n===============')
         print(f"Epoch: {epoch + initial_epoch + 1} \n"
               f"current step: {current_steps}\n"
-              f"Acc_train: {acc_train} \nLoss_avg: {loss_sum}")
+              f"Acc_train: {acc_train}")
+        for idx, result in enumerate(Fur_acc):
+            print(f'Acc_{metric_tags_fur[idx]}: {result[0] / result[1]} ')
+        print(f'Loss_avg: {loss_sum}')
         print('===============')
 
         # Clear the record for the next epoch
         true_positive = 0
         samples = 0
         loss_sum = 0
+        Fur_acc = [[0, 0] for _ in range(len(metric_tags_fur))]
 
         # Saving checkpoint
         save_checkpoint(

@@ -108,6 +108,35 @@ class cp_2_k_mask(nn.Module):
         # linear projectors for predictions
         self.linear_projectors = nn.Linear(args['HIDDEN'] * 2, out_channels * 3)
 
+        # Further experiments projector
+        self.num_rand_rotor_type = args['Random_rotors_num']
+        self.random_reflector =  args['Random_reflector']
+        self.num_rand_ringsetting = args['Random_ringsetting_num']
+        self.num_rand_plug = args['Random_plugboard_num']
+
+
+
+        # self.further_experiment_proj = nn.ModuleList()
+        # random rotors (8 different types of rotors) shape : [1 - 3, 8]
+        if args['Random_rotors_num'] is not None:
+            # shape [batch, feats] -> [batch, rotor_num, rotor_type(8)]
+            self.rotor_type_proj = nn.Linear(args['HIDDEN'] * 2, self.num_rand_rotor_type * 8)
+
+        # random reflector (B and C) shape : [1]
+        if args['Random_reflector'] is not None:
+            # Shape: [batch, feats] -> [batch]
+            self.reflector_proj = nn.Linear(args['HIDDEN'] * 2, 2)
+
+        # random ring setting (26 ringsetting for each rotor) shape : [1 - 3, 26]
+        if args['Random_ringsetting_num'] is not None:
+            # shape: [batch, feats] -> [batch, ringsetting_num, 26]
+            self.ringsetting_proj = nn.Linear(args['HIDDEN'] * 2, self.num_rand_ringsetting * 26)
+
+        # Random plugboard( 26x 26 plugboard setting) shape : [26, 26]
+        if args['Random_plugboard_num'] is not None:
+            # shape: [batch, feats] -> [batch, 26, 26]
+            self.plugboard_proj = nn.Linear(args['HIDDEN'] * 2, 26 * 26)
+
 
     def forward(self, x, masks):
         # Embedding
@@ -124,7 +153,26 @@ class cp_2_k_mask(nn.Module):
             x = layer(x, src_key_padding_mask=masks)
 
         # predictions
-        return self.linear_projectors(x).view(seq, batch, 3, self.out_channels).permute(2, 0, 1, 3)
+        position_pred = self.linear_projectors(x).reshape(seq, batch, 3, self.out_channels).permute(2, 0, 1, 3)
+
+        # Further prediction
+        # From here we place the features on the second dimension because the Cross Entropy loss works on the second dim
+        further = []
+        x = torch.mean(x, dim=0)
+        if self.num_rand_rotor_type is not None:
+            further.append(self.rotor_type_proj(x).reshape(batch, 8, self.num_rand_rotor_type))
+
+        if self.random_reflector is not None:
+            further.append(self.reflector_proj(x))
+
+        if self.num_rand_ringsetting is not None:
+            further.append(self.ringsetting_proj(x).reshape(batch, 26, self.num_rand_ringsetting))
+
+        if self.num_rand_plug is not None:
+            further.append(self.plugboard_proj(x).reshape(batch, 26, 26))
+
+
+        return position_pred, further
         # return torch.stack([proj(x) for proj in self.linear_projectors])  # -> [3, seq, batch, out_channels]
 
 

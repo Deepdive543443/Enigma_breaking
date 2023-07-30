@@ -286,9 +286,26 @@ class Random_setting_dataset(Enigma_simulate_dataset):
     def __init__(self, args):
         super(Random_setting_dataset, self).__init__(args)
         self.batchsize = args['BATCH_SIZE']
+        self.args = args
+        self.rotors_roman = {
+            0:'I', 1:'II', 2:'III', 3:'IV', 4: 'V', 5:'VI', 6:'VII', 7:'VIII'
+        }
+
+        self.num_key_sheet = 0
+        if args['Random_rotors_num'] is not None:
+            self.num_key_sheet += 1
+        # random reflector (B and C) shape : [1]
+        if args['Random_reflector'] is not None:
+            self.num_key_sheet += 1
+        # random ring setting (26 ringsetting for each rotor) shape : [1 - 3, 26]
+        if args['Random_ringsetting_num'] is not None:
+            self.num_key_sheet += 1
+        # Random plugboard( 26x 26 plugboard setting) shape : [26, 26]
+        if args['Random_plugboard_num'] is not None:
+            self.num_key_sheet += 1
 
 
-    def make_key_sheet(self):
+    def make_key_sheet(self, args):
         key_sheet = {
             'rotors' : 'II IV V',
             'reflector' : 'B',
@@ -296,18 +313,69 @@ class Random_setting_dataset(Enigma_simulate_dataset):
             'plugboard_settings' : 'AV BS CG DL FU HZ IN KM OW RX'
         }
 
-        # TBA
+        targets = []
 
-        # random reflector
+        # random rotors (8 different types of rotors) shape : [1 - 3, 8]
+        if args['Random_rotors_num'] is not None:
 
-        # random ring setting
+            # Update keysheet
+            rotors_str = key_sheet['rotors'].split(' ')
+            randomized_rotor_int = [random.randint(0, 7) for i in range(args['Random_rotors_num'])]
+            randomized_rotor = [self.rotors_roman[i] for i in randomized_rotor_int]
+            rotors_str[:args['Random_rotors_num']] = randomized_rotor
+            key_sheet['rotors'] = ' '.join(rotors_str)
 
-        # random rotors
+            # To tensor
+            targets.append(torch.LongTensor(randomized_rotor_int))
 
-        # Random plugboard
 
 
-        return key_sheet
+        # random reflector (B and C) shape : [1]
+        if args['Random_reflector'] is not None:
+
+            # Update keysheet
+            reflector_indice = torch.randint(0, 2, ())
+            key_sheet['reflector'] = 'B' if reflector_indice == 0 else 'C'
+
+            # Adding target
+            targets.append(reflector_indice)
+
+
+        # random ring setting (26 ringsetting for each rotor) shape : [1 - 3, 26]
+        if args['Random_ringsetting_num'] is not None:
+
+            # Update keysheet
+            new_settings = [random.randint(0, 25) for i in range(args['Random_ringsetting_num'])]
+            # key_sheet['ring_settings'][:-args['Random_ringsetting_num']] = new_settings
+            for idx, setting in enumerate(new_settings):
+                key_sheet['ring_settings'][idx] = setting
+
+            # Adding target
+            targets.append(torch.LongTensor(new_settings))
+
+
+
+        # Random plugboard( 26x 26 plugboard setting) shape : [26, 26]
+        if args['Random_plugboard_num'] is not None:
+            # Generate the new connection
+            plugs = torch.randperm(26)[:args['Random_plugboard_num'] * 2]
+
+            # transfer to string
+            plug_board_str = []
+
+            for idx, connection in zip(plugs[::2], plugs[1::2]):
+                plug_board_str.append(chr(idx + 65) + chr(connection + 65))
+            key_sheet['plugboard_settings'] = ' '.join(plug_board_str)
+
+            # to tensor
+            original_connection = torch.linspace(0, 25, steps=26).long()
+            original_connection[plugs[::2]] = plugs[1::2]
+            original_connection[plugs[1::2]] = plugs[::2]
+
+            targets.append(original_connection)
+
+
+        return key_sheet, targets
 
     def __len__(self):
         return self.batchsize * 500
@@ -318,10 +386,15 @@ class Random_setting_dataset(Enigma_simulate_dataset):
         targets_batch = []
         mask_batch = []
 
-        for inputs, targets, masks in batch:
+        key_sheet_batch = [[] for i in range(self.num_key_sheet)]
+
+        for inputs, targets, masks, key_sheet in batch:
             inputs_batch.append(inputs)
             targets_batch.append(targets)
             mask_batch.append(masks)
+
+            for idx, key in enumerate(key_sheet):
+                key_sheet_batch[idx].append(key)
 
         # Merge list of sentences into a batch with padding
 
@@ -329,13 +402,26 @@ class Random_setting_dataset(Enigma_simulate_dataset):
         targets_batch = pad_sequence(targets_batch, batch_first=True).permute(2, 1, 0) # [seq, rotor] -> [batch, seq, rotor] -> [rotor, seq, batch]
         mask_batch = pad_sequence(mask_batch, batch_first=True, padding_value=1).bool() # -> [seq, batch]
 
+        for idx, key in enumerate(key_sheet_batch):
+            key_sheet_batch[idx] = torch.stack(key)
+
+
         # Transfer back to [batch, indice]
-        return inputs_batch, targets_batch, mask_batch
+        return inputs_batch, targets_batch, mask_batch, key_sheet_batch
 
     def __getitem__(self, index):
         # Generate a random sequence with random length
         rand_length = random.randint(self.seq_length[0], self.seq_length[1])
         rand_states = random.randint(0, 17575)
+
+        key_sheet_random, targets = self.make_key_sheet(self.args)
+        self.enigma_machine = EnigmaMachine.from_key_sheet(
+            rotors=key_sheet_random['rotors'],
+            reflector=key_sheet_random['reflector'],
+            ring_settings=key_sheet_random['ring_settings'],
+            plugboard_settings=key_sheet_random['plugboard_settings'],
+
+        )
 
         plaintext_indice, cipher_text_indice, states_indice, plaintext, ciphertext, states = self.get_cipher_plain_positions(rand_states, rand_length)
 
@@ -347,7 +433,7 @@ class Random_setting_dataset(Enigma_simulate_dataset):
         cipher_text_vector[torch.arange(cipher_text_indice.shape[0]), cipher_text_indice] = 1
 
         mask = torch.zeros(rand_length)
+        sas = torch.cat([cipher_text_vector, plaintext_text_vector], dim=1)
 
-
-        return torch.cat([cipher_text_vector, plaintext_text_vector], dim=1), states_indice, mask
+        return torch.cat([cipher_text_vector, plaintext_text_vector], dim=1), states_indice, mask, targets
 

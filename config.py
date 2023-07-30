@@ -58,6 +58,14 @@ args = {
     'LOG': os.path.join('tensorboard', strftime("%a%d%b%Y%H%M%S", gmtime())),
     'LOAD_CKPT': None,#'tensorboard/Wed05Jul2023104232/CP2K_RNN_ENC_ckpt.pt', #'tensorboard/Thu29Jun2023122123/CP2K_RNN_ENC_ckpt.pt', # Paste the path of checkpoint here
 
+    # Further experiments
+    'Random_rotors_num': None,
+    'Random_reflector': True,
+    'Random_plugboard_num': None,
+    'Random_ringsetting_num': None,
+
+
+
     # Batch mode(cluster mode)
     'USE_COMPILE': 0,
     'PROGRESS_BAR': 1, # Turn this off if the programme shows reprinting issues in batch mode output.
