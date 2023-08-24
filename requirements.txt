@@ -1,4 +1,4 @@
 py-enigma
 tqdm
-keras_nlp
 matplotlib
+tensorboard
